@@ -1,0 +1,23 @@
+package:
+  name: pursocket
+  dependencies:
+    - prelude
+    - effect
+    - aff
+    - console
+    - maybe
+    - either
+    - typelevel-prelude
+  test:
+    main: Test.Main
+    dependencies:
+      - spec
+      - spec-discovery
+      - spec-node
+      - aff
+      - refs
+      - console
+workspace:
+  packageSet:
+    registry: 72.0.1
+  extraPackages: {}

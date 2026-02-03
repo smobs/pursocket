@@ -1,0 +1,22 @@
+{
+  "name": "pursocket",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Type-safe Socket.io protocol library for PureScript",
+  "scripts": {
+    "build": "spago build",
+    "test": "spago test && bash test-negative/run-negative-tests.sh",
+    "bundle": "node scripts/bundle-browser.mjs"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.0",
+    "socket.io-client": "^4.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0",
+    "purs-backend-es": "^1.4.0",
+    "purs-tidy": "^0.10.0",
+    "purescript": "^0.15.0",
+    "spago": "^0.93.0"
+  }
+}
