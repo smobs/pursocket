@@ -18,6 +18,7 @@ import PurSocket.Server
   , onDisconnect
   , socketId
   , broadcast
+  , broadcastExceptSender
   )
 import PurSocket.Internal (ServerSocket)
 
@@ -56,7 +57,7 @@ startChat server = do
       let sender = case Array.find (\u -> u.id == sid) currentUsers of
             Nothing -> defaultNick
             Just u  -> u.nickname
-      broadcast @ChatProtocol @"chat" @"newMessage" server
+      broadcastExceptSender @ChatProtocol @"chat" @"newMessage" handle
         { sender, text: payload.text }
 
     -- Handle disconnect

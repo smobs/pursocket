@@ -15,6 +15,11 @@
 -- | Attempting to violate these constraints produces a compile error.
 module PurSocket.Server
   ( broadcast
+  , emitTo
+  , broadcastExceptSender
+  , joinRoom
+  , leaveRoom
+  , broadcastToRoom
   , onEvent
   , onCallEvent
   , onConnection
@@ -67,6 +72,122 @@ broadcast server payload =
   primBroadcast server nsStr eventStr payload
   where
   nsStr = reflectSymbol (Proxy :: Proxy ns)
+  eventStr = reflectSymbol (Proxy :: Proxy event)
+
+-- | Send a typed message to the single client identified by the
+-- | `NamespaceHandle`.  The event must exist as a `Msg` in the
+-- | protocol's `s2c` direction for the specified namespace.
+-- |
+-- | Calling `emitTo` on a handle for a disconnected client is a
+-- | silent no-op (consistent with Socket.io's behavior).  Use
+-- | `onDisconnect` to remove stale handles from application state.
+-- |
+-- | To send private messages, store handles from `onConnection` in a
+-- | `Ref (Map UserId (NamespaceHandle ns))` and look up the recipient's
+-- | handle when needed.  Remove handles in `onDisconnect`.
+-- |
+-- | Internally performs: `socket.emit(event, payload)` on the handle's
+-- | underlying socket reference.
+-- |
+-- | Example:
+-- | ```purescript
+-- | emitTo @AppProtocol @"chat" @"privateMsg" recipientHandle { text: "hello" }
+-- | ```
+emitTo
+  :: forall @protocol @ns @event payload
+   . IsValidMsg protocol ns event "s2c" payload
+  => IsSymbol event
+  => NamespaceHandle ns
+  -> payload
+  -> Effect Unit
+emitTo handle payload =
+  primEmitTo (socketRefFromHandle handle) eventStr payload
+  where
+  eventStr = reflectSymbol (Proxy :: Proxy event)
+
+-- | Broadcast a typed message to all clients in the namespace EXCEPT
+-- | the client identified by the `NamespaceHandle`.  The event must
+-- | exist as a `Msg` in the protocol's `s2c` direction.
+-- |
+-- | This is the standard echo-prevention pattern: when a client sends
+-- | a message, the server re-broadcasts it to everyone else using the
+-- | sender's handle to exclude them.
+-- |
+-- | Internally performs: `socket.broadcast.emit(event, payload)` on
+-- | the handle's underlying socket reference.
+-- |
+-- | Example:
+-- | ```purescript
+-- | onEvent @AppProtocol @"chat" @"sendMessage" handle \msg ->
+-- |   broadcastExceptSender @AppProtocol @"chat" @"newMessage" handle msg
+-- | ```
+broadcastExceptSender
+  :: forall @protocol @ns @event payload
+   . IsValidMsg protocol ns event "s2c" payload
+  => IsSymbol event
+  => NamespaceHandle ns
+  -> payload
+  -> Effect Unit
+broadcastExceptSender handle payload =
+  primBroadcastExceptSender (socketRefFromHandle handle) eventStr payload
+  where
+  eventStr = reflectSymbol (Proxy :: Proxy event)
+
+-- | Add the client identified by the handle to a Socket.io room.
+-- | Room names are runtime strings (not type-level validated).
+-- |
+-- | Uses the default in-memory adapter's synchronous join semantics.
+-- | If you use an async adapter (e.g., Redis), the join may not have
+-- | propagated to other servers by the time this call returns.  A
+-- | future PurSocket version may provide an `Aff` variant for async
+-- | adapter support.
+-- |
+-- | Internally performs: `socket.join(room)` (promise discarded).
+joinRoom :: forall ns. NamespaceHandle ns -> String -> Effect Unit
+joinRoom handle room =
+  primJoinRoom (socketRefFromHandle handle) room
+
+-- | Remove the client identified by the handle from a Socket.io room.
+-- |
+-- | Uses the default in-memory adapter's synchronous leave semantics.
+-- | If you use an async adapter (e.g., Redis), the leave may not have
+-- | propagated to other servers by the time this call returns.  A
+-- | future PurSocket version may provide an `Aff` variant for async
+-- | adapter support.
+-- |
+-- | Internally performs: `socket.leave(room)` (promise discarded).
+leaveRoom :: forall ns. NamespaceHandle ns -> String -> Effect Unit
+leaveRoom handle room =
+  primLeaveRoom (socketRefFromHandle handle) room
+
+-- | Broadcast a typed message to all members of a room EXCEPT the
+-- | client identified by the `NamespaceHandle` (socket-level
+-- | semantics).  The event must exist as a `Msg` in the protocol's
+-- | `s2c` direction.
+-- |
+-- | This uses `socket.to(room).emit()`, which automatically excludes
+-- | the sender socket from delivery.  If you need to include the
+-- | sender, call `broadcastToRoom` and then `emitTo` on the sender's
+-- | own handle.
+-- |
+-- | Internally performs: `socket.to(room).emit(event, payload)`
+-- |
+-- | Example:
+-- | ```purescript
+-- | joinRoom handle "game-42"
+-- | broadcastToRoom @AppProtocol @"game" @"playerJoined" handle "game-42" { name: "Alice" }
+-- | ```
+broadcastToRoom
+  :: forall @protocol @ns @event payload
+   . IsValidMsg protocol ns event "s2c" payload
+  => IsSymbol event
+  => NamespaceHandle ns
+  -> String
+  -> payload
+  -> Effect Unit
+broadcastToRoom handle room payload =
+  primBroadcastToRoom (socketRefFromHandle handle) room eventStr payload
+  where
   eventStr = reflectSymbol (Proxy :: Proxy event)
 
 -- | Register a connection handler for namespace `ns`.  When a client
@@ -201,3 +322,13 @@ foreign import primOnDisconnect :: SocketRef -> Effect Unit -> Effect Unit
 foreign import primSocketId :: SocketRef -> String
 
 foreign import primCloseServer :: ServerSocket -> Effect Unit
+
+foreign import primEmitTo :: forall a. SocketRef -> String -> a -> Effect Unit
+
+foreign import primBroadcastExceptSender :: forall a. SocketRef -> String -> a -> Effect Unit
+
+foreign import primJoinRoom :: SocketRef -> String -> Effect Unit
+
+foreign import primLeaveRoom :: SocketRef -> String -> Effect Unit
+
+foreign import primBroadcastToRoom :: forall a. SocketRef -> String -> String -> a -> Effect Unit
