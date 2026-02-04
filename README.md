@@ -52,6 +52,67 @@ npm install socket.io
 
 Both `socket.io` and `socket.io-client` version `^4.7.0` are required.
 
+## New Project Setup
+
+This section covers the steps to go from an empty directory to a running PurSocket project. For a full walkthrough, see `docs/GETTING_STARTED.md`.
+
+### Step 1: Initialize and configure Spago
+
+```bash
+spago init
+```
+
+Then edit `spago.yaml` to add PurSocket as a git dependency (see the [Installation](#installation) section above for the full `spago.yaml` snippet). Make sure your `dependencies` list includes `pursocket`, `prelude`, `effect`, and `aff`.
+
+### Step 2: Install npm peer dependencies and bundler
+
+```bash
+npm install socket.io socket.io-client esbuild
+```
+
+`socket.io` is the server library, `socket.io-client` is for browser or Node clients, and `esbuild` bundles the compiled PureScript ESM output into a single file the browser can load.
+
+### Step 3: Create a server entry-point
+
+PureScript compiles to ES modules via `purs-backend-es`. You need a small JavaScript file to create the HTTP server, attach Socket.io, and call into your PureScript code. Save this as `start-server.mjs`:
+
+```js
+import { createServer } from "http";
+import { Server } from "socket.io";
+import { main } from "./output-es/MyApp.Server/index.js"; // your compiled PS module
+
+const httpServer = createServer();                // 1. Create an HTTP server
+const io = new Server(httpServer);                // 2. Attach Socket.io to it
+main(io)();                                       // 3. Pass io into PureScript (see Step 5)
+httpServer.listen(3000, () =>                     // 4. Start listening
+  console.log("Running on http://localhost:3000")
+);
+```
+
+If you need to serve static files (HTML, bundled JS), add a request handler to `createServer()`. See `examples/chat/start-server.mjs` for a complete example with static file serving.
+
+### Step 4: Bundle the browser client
+
+After `spago build`, bundle the client module for the browser:
+
+```bash
+npx esbuild output-es/MyApp.Client/index.js --bundle --format=esm --platform=browser --outfile=static/client.bundle.js
+```
+
+Then load the bundle in your HTML with `<script type="module" src="client.bundle.js"></script>`.
+
+### Step 5: PureScript Effect calling convention
+
+When JavaScript code calls a PureScript `Effect` function, every argument is passed one at a time (curried), and the final `()` triggers the effect:
+
+```js
+// PureScript: main :: ServerSocket -> Effect Unit
+// JavaScript: main is  function(io) { return function() { ... } }
+main(io)();    // pass the argument, then () to run the effect
+```
+
+If a function takes two arguments (`f :: A -> B -> Effect Unit`), call it as `f(a)(b)()`. The trailing `()` is always required -- without it, nothing happens.
+
 ## Quick Start
 
 ### 1. Define Your Protocol
@@ -234,6 +295,16 @@ If any lookup fails, an instance chain fallback produces a custom error via `Pri
 ### Protocol Namespaces and Socket.io Namespaces
 
 PurSocket protocol namespaces map directly to Socket.io namespaces (not rooms). Each namespace has independent connection semantics, isolated event handlers, and a separate socket object. The `joinNs` function connects to `baseUrl + "/" + ns`, and the returned handle wraps that namespace-specific socket.
+
+## Trust Model
+
+PurSocket's type safety guarantee depends on both peers using the same protocol definition. The library trusts the transport boundary -- it performs no runtime payload validation. This is an intentional design choice to achieve zero runtime overhead, not an oversight.
+
+**When both peers use PurSocket** with the same `AppProtocol`, compile-time checks on the send side (`emit`, `broadcast`, `call` response) guarantee that values produced at the transport boundary match the types expected by the receiver. Socket.io faithfully round-trips record types through JSON serialization. Under these conditions, the FFI functions (which internally use `forall a` types the compiler cannot verify) are unreachable with incorrect types through PurSocket's public API.
+
+**PurSocket does not protect against untrusted peers.** If a non-PurSocket client connects to your server, or if client and server are deployed with different protocol versions, payloads may arrive that do not match the expected types. PurSocket will not detect this -- the values will be passed through as-is, potentially causing runtime failures.
+
+If you need to defend against untrusted peers, validate payloads at your application boundary using a library like `argonaut-codecs` before passing them into your domain logic. This is outside PurSocket's scope.
 
 ## Scope
 

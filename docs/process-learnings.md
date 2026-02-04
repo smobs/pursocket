@@ -16,3 +16,19 @@ Accumulated learnings from project cycles. Check these before starting new work.
 **Building:** Parallel slice execution worked well. Coordinator verification caught a critical bug (negative tests not forcing constraint resolution) that subagents missed. Always verify compilation independently after subagent work.
 
 **Scoping:** Send-only API slices created a gap filled during integration testing. For bidirectional protocols, scope receive-side alongside send-side.
+
+### 2026-02-04 — Clone-and-Run Starter Chat App
+
+**From Team Proposals:**
+- Create pre-build API checklist cross-referencing Socket.io primitives against target application (proposed by purescript-specialist)
+- Add `attachToHttpServer` to PurSocket.Server for standard deployment patterns (proposed by web-tech-expert)
+- Declarative config file convention for negative test subdirectories (proposed by qa)
+- Create `docs/GETTING_STARTED.md` for "start your own project" path (proposed by product-manager)
+- Full Socket.io API surface audit with keep/defer/never decisions (proposed by architect)
+- "New Project Setup" section in README with copy-pasteable steps (proposed by external-user)
+
+**Shaping:** Shaped pitch accurately predicted scope. Two clean scope cuts (timestamp, server lifecycle) didn't affect core value.
+
+**Building:** Building a real application exposed 2 library API gaps that integration tests missed. Test suite validates protocol correctness but not application completeness. Pre-build API checklists would catch this earlier.
+
+**Documentation:** Demo onboarding (3 commands) works, but "start your own project" path is undocumented. Server bootstrap, client bundling, and Effect calling convention are all invisible steps. Document the glue, not just the API.
