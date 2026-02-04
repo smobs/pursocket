@@ -7,7 +7,7 @@ import { statSync } from "fs";
 
 try {
   buildSync({
-    entryPoints: ["output/PurSocket.BrowserTest/index.js"],
+    entryPoints: ["output-es/PurSocket.BrowserTest/index.js"],
     bundle: true,
     outfile: "dist/PurSocket.bundle.js",
     format: "esm",

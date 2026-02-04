@@ -5,8 +5,11 @@
   "description": "Type-safe Socket.io protocol library for PureScript",
   "scripts": {
     "build": "spago build",
-    "test": "spago test && bash test-negative/run-negative-tests.sh",
-    "bundle": "node scripts/bundle-browser.mjs"
+    "test": "spago build && node --input-type=module -e \"import {main} from './output-es/Test.Main/index.js'; main()\" && bash test-negative/run-negative-tests.sh",
+    "bundle": "node scripts/bundle-browser.mjs",
+    "chat:build": "spago build -p chat-example && npx esbuild output-es/Chat.Client.Main/index.js --bundle --format=esm --platform=browser --outfile=examples/chat/static/client.bundle.js",
+    "chat:start": "node examples/chat/start-server.mjs",
+    "chat": "npm run chat:build && npm run chat:start"
   },
   "dependencies": {
     "socket.io": "^4.7.0",
