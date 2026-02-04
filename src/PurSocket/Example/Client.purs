@@ -28,13 +28,13 @@ module PurSocket.Example.Client
   ( exampleClient
   ) where
 
-import Prelude hiding (join)
+import Prelude
 
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console (log)
-import PurSocket.Client (connect, join, emit, call)
+import PurSocket.Client (connect, joinNs, emit, call)
 import PurSocket.Example.Protocol (AppProtocol)
 
 -- | Example client demonstrating PurSocket's client API.
@@ -78,7 +78,7 @@ exampleClientAff = do
   -- The type-level parameter @"lobby" is reflected to the string
   -- "/lobby" at runtime.  The returned `NamespaceHandle "lobby"`
   -- is a capability token scoped to this namespace.
-  lobby <- liftEffect $ join @"lobby" socket
+  lobby <- liftEffect $ joinNs @"lobby" socket
 
   -- Emit a fire-and-forget chat message.
   -- The IsValidMsg constraint resolves:
@@ -98,6 +98,6 @@ exampleClientAff = do
   -- Join the "game" namespace and emit a move.
   -- Demonstrates that multiple namespaces can be used independently,
   -- each with its own handle and its own set of valid events.
-  game <- liftEffect $ join @"game" socket
+  game <- liftEffect $ joinNs @"game" socket
   liftEffect $ emit @AppProtocol @"game" @"move" game { x: 10, y: 20 }
   liftEffect $ log "Move emitted to game namespace"

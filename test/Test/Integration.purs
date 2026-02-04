@@ -7,7 +7,7 @@ module Test.Integration
   ( integrationSpec
   ) where
 
-import Prelude hiding (join)
+import Prelude
 
 import Data.Either (Either(..))
 import Effect.Aff (Aff, makeAff, nonCanceler, delay)
@@ -68,7 +68,7 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join namespace
-        lobby <- liftEffect $ Client.join @"lobby" sock
+        lobby <- liftEffect $ Client.joinNs @"lobby" sock
         liftAff $ waitForNsConnect lobby
 
         -- Emit a message
@@ -104,7 +104,7 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join namespace
-        lobby <- liftEffect $ Client.join @"lobby" sock
+        lobby <- liftEffect $ Client.joinNs @"lobby" sock
 
         -- Set up client-side listener for s2c messages BEFORE the
         -- namespace connection completes.  The socket from join
@@ -141,7 +141,7 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join namespace
-        lobby <- liftEffect $ Client.join @"lobby" sock
+        lobby <- liftEffect $ Client.joinNs @"lobby" sock
         liftAff $ waitForNsConnect lobby
 
         -- Make the call
@@ -175,7 +175,7 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join game namespace
-        game <- liftEffect $ Client.join @"game" sock
+        game <- liftEffect $ Client.joinNs @"game" sock
         liftAff $ waitForNsConnect game
 
         -- Emit a move

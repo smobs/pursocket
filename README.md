@@ -83,18 +83,18 @@ type AppProtocol =
 ```purescript
 module MyApp.Client where
 
-import Prelude hiding (join)
+import Prelude
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console (log)
-import PurSocket.Client (connect, join, emit, call)
+import PurSocket.Client (connect, joinNs, emit, call)
 import MyApp.Protocol (AppProtocol)
 
 main :: Effect Unit
 main = launchAff_ do
   socket <- liftEffect $ connect "http://localhost:3000"
-  lobby <- liftEffect $ join @"lobby" socket
+  lobby <- liftEffect $ joinNs @"lobby" socket
 
   -- Fire-and-forget message
   liftEffect $ emit @AppProtocol @"lobby" @"chat" lobby { text: "Hello!" }
@@ -160,7 +160,7 @@ Type-level validation engine and capability token.
 
 | Export | Type | Description |
 |--------|------|-------------|
-| `NamespaceHandle` | `data NamespaceHandle (ns :: Symbol)` | Phantom-typed capability token for a namespace. Obtained via `join` (client) or `onConnection` (server). |
+| `NamespaceHandle` | `data NamespaceHandle (ns :: Symbol)` | Phantom-typed capability token for a namespace. Obtained via `joinNs` (client) or `onConnection` (server). |
 | `IsValidMsg` | `class IsValidMsg protocol ns event dir payload` | Validates that a `Msg` event exists in the given namespace/direction. Fundep: `protocol ns event dir -> payload`. |
 | `IsValidCall` | `class IsValidCall protocol ns event dir payload response` | Validates that a `Call` event exists in the given namespace/direction. Fundep: `protocol ns event dir -> payload response`. |
 
@@ -171,7 +171,7 @@ Client-side API. All `emit` and `call` functions are constrained to the `c2s` di
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `connect` | `String -> Effect SocketRef` | Connect to a Socket.io server at the given URL |
-| `join` | `forall @ns. IsSymbol ns => SocketRef -> Effect (NamespaceHandle ns)` | Join a namespace, obtaining a capability token |
+| `joinNs` | `forall @ns. IsSymbol ns => SocketRef -> Effect (NamespaceHandle ns)` | Join a namespace, obtaining a capability token |
 | `emit` | `forall @protocol @ns @event payload. IsValidMsg protocol ns event "c2s" payload => IsSymbol event => NamespaceHandle ns -> payload -> Effect Unit` | Emit a fire-and-forget message |
 | `call` | `forall @protocol @ns @event payload res. IsValidCall protocol ns event "c2s" payload res => IsSymbol event => NamespaceHandle ns -> payload -> Aff res` | Request/response call with default timeout (5000ms) |
 | `callWithTimeout` | `... => NamespaceHandle ns -> Int -> payload -> Aff res` | Like `call` with a custom timeout in milliseconds |
@@ -229,18 +229,18 @@ If any lookup fails, an instance chain fallback produces a custom error via `Pri
 
 ### NamespaceHandle
 
-`NamespaceHandle (ns :: Symbol)` is a phantom-typed newtype over the raw Socket.io socket. The phantom parameter ties the handle to a specific namespace so that the compiler can verify events belong to that namespace. You cannot construct a `NamespaceHandle` directly -- it is obtained only via `join` (client) or `onConnection` (server).
+`NamespaceHandle (ns :: Symbol)` is a phantom-typed newtype over the raw Socket.io socket. The phantom parameter ties the handle to a specific namespace so that the compiler can verify events belong to that namespace. You cannot construct a `NamespaceHandle` directly -- it is obtained only via `joinNs` (client) or `onConnection` (server).
 
 ### Protocol Namespaces and Socket.io Namespaces
 
-PurSocket protocol namespaces map directly to Socket.io namespaces (not rooms). Each namespace has independent connection semantics, isolated event handlers, and a separate socket object. The `join` function connects to `baseUrl + "/" + ns`, and the returned handle wraps that namespace-specific socket.
+PurSocket protocol namespaces map directly to Socket.io namespaces (not rooms). Each namespace has independent connection semantics, isolated event handlers, and a separate socket object. The `joinNs` function connects to `baseUrl + "/" + ns`, and the returned handle wraps that namespace-specific socket.
 
 ## Scope
 
 ### In v1
 
 - Shared protocol type (`Msg` and `Call` patterns)
-- Client API: `connect`, `join`, `emit`, `call`, `callWithTimeout`, `onMsg`
+- Client API: `connect`, `joinNs`, `emit`, `call`, `callWithTimeout`, `onMsg`
 - Server API: `createServer`, `createServerWithPort`, `broadcast`, `onConnection`, `onEvent`, `onCallEvent`, `closeServer`
 - Custom type errors for invalid events, namespaces, and directions
 - Browser bundling (esbuild)

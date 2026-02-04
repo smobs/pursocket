@@ -16,7 +16,7 @@
 -- | ```
 module PurSocket.Client
   ( connect
-  , join
+  , joinNs
   , emit
   , call
   , callWithTimeout
@@ -44,7 +44,7 @@ defaultTimeout = 5000
 -- | Connect to a Socket.io server at the given URL.
 -- |
 -- | Returns an opaque `SocketRef` representing the base connection
--- | (default namespace).  Use `join` to connect to specific namespaces
+-- | (default namespace).  Use `joinNs` to connect to specific namespaces
 -- | and obtain `NamespaceHandle` capability tokens.
 -- |
 -- | Internally calls `io(url)` from `socket.io-client`.
@@ -63,14 +63,14 @@ connect = primConnect
 -- |
 -- | Example:
 -- | ```purescript
--- | lobby <- join @"lobby" socket
+-- | lobby <- joinNs @"lobby" socket
 -- | ```
-join
+joinNs
   :: forall @ns
    . IsSymbol ns
   => SocketRef
   -> Effect (NamespaceHandle ns)
-join baseSocket = do
+joinNs baseSocket = do
   nsSocket <- primJoin baseSocket nsStr
   pure (mkNamespaceHandle nsSocket)
   where

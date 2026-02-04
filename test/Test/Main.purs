@@ -68,9 +68,9 @@ main = runSpecAndExitProcess [ consoleReporter ] do
         -- Compile-time test: verifies connect has the right type.
         testConnectType `shouldEqual` unit
 
-      it "join returns Effect (NamespaceHandle ns)" do
-        -- Compile-time test: verifies join signature.
-        testJoinType `shouldEqual` unit
+      it "joinNs returns Effect (NamespaceHandle ns)" do
+        -- Compile-time test: verifies joinNs signature.
+        testJoinNsType `shouldEqual` unit
 
       it "emit resolves IsValidMsg for c2s events" do
         -- Compile-time test: verifies emit signature resolves
@@ -204,12 +204,12 @@ testConnectType = const unit connectRef
   connectRef :: String -> Effect SocketRef
   connectRef = Client.connect
 
--- | Proves that `join` has the correct type signature.
-testJoinType :: Unit
-testJoinType = const unit joinRef
+-- | Proves that `joinNs` has the correct type signature.
+testJoinNsType :: Unit
+testJoinNsType = const unit joinNsRef
   where
-  joinRef :: SocketRef -> Effect (NamespaceHandle "lobby")
-  joinRef = Client.join @"lobby"
+  joinNsRef :: SocketRef -> Effect (NamespaceHandle "lobby")
+  joinNsRef = Client.joinNs @"lobby"
 
 -- | Proves that `emit` resolves IsValidMsg for c2s events.
 testEmitType :: Unit

@@ -11,7 +11,7 @@ module PurSocket.BrowserTest
   ( main
   ) where
 
-import Prelude hiding (join)
+import Prelude
 
 import Effect (Effect)
 import Effect.Console (log)
