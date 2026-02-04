@@ -1,5 +1,6 @@
 # PureScript
 output/
+output-es/
 .spago/
 .psci_modules/
 .purs-repl
@@ -14,6 +15,7 @@ package-lock.json
 dist/
 bundle/
 generated-docs/
+examples/chat/static/client.bundle.js
 
 # Editor
 .idea/

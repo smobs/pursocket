@@ -21,3 +21,8 @@ workspace:
   packageSet:
     registry: 72.0.1
   extraPackages: {}
+  backend:
+    cmd: "npx"
+    args:
+      - "purs-backend-es"
+      - "build"

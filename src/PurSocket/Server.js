@@ -32,6 +32,14 @@ export const primOnCallEvent = (socket) => (event) => (handler) => () => {
   });
 };
 
+// primOnDisconnect :: SocketRef -> Effect Unit -> Effect Unit
+export const primOnDisconnect = (socket) => (callback) => () => {
+  socket.on("disconnect", () => callback());
+};
+
+// primSocketId :: SocketRef -> String
+export const primSocketId = (socket) => socket.id;
+
 // primCloseServer :: ServerSocket -> Effect Unit
 export const primCloseServer = (io) => () => {
   io.close();

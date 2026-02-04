@@ -1,6 +1,71 @@
 {
   "workspace": {
     "packages": {
+      "chat-example": {
+        "path": "examples/chat",
+        "core": {
+          "dependencies": [
+            "aff",
+            "arrays",
+            "console",
+            "effect",
+            "maybe",
+            "prelude",
+            "pursocket",
+            "refs"
+          ],
+          "build_plan": [
+            "aff",
+            "arrays",
+            "bifunctors",
+            "console",
+            "const",
+            "contravariant",
+            "control",
+            "datetime",
+            "distributive",
+            "effect",
+            "either",
+            "enums",
+            "exceptions",
+            "exists",
+            "foldable-traversable",
+            "functions",
+            "functors",
+            "gen",
+            "identity",
+            "integers",
+            "invariant",
+            "lazy",
+            "lists",
+            "maybe",
+            "newtype",
+            "nonempty",
+            "numbers",
+            "ordered-collections",
+            "orders",
+            "parallel",
+            "partial",
+            "prelude",
+            "profunctor",
+            "pursocket",
+            "refs",
+            "safe-coerce",
+            "st",
+            "tailrec",
+            "transformers",
+            "tuples",
+            "type-equality",
+            "typelevel-prelude",
+            "unfoldable",
+            "unsafe-coerce"
+          ]
+        },
+        "test": {
+          "dependencies": [],
+          "build_plan": []
+        }
+      },
       "pursocket": {
         "path": "./",
         "core": {

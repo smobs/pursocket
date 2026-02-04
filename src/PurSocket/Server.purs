@@ -18,6 +18,8 @@ module PurSocket.Server
   , onEvent
   , onCallEvent
   , onConnection
+  , onDisconnect
+  , socketId
   , createServer
   , createServerWithPort
   , closeServer
@@ -144,6 +146,34 @@ onCallEvent handle handler =
   where
   eventStr = reflectSymbol (Proxy :: Proxy event)
 
+-- | Register a handler for when a client disconnects from a namespace.
+-- |
+-- | The "disconnect" event is a Socket.io system event (not a protocol
+-- | event), so it bypasses protocol validation.  The callback receives
+-- | no payload -- use `socketId` before the disconnect to track which
+-- | client left.
+-- |
+-- | Internally performs: `socket.on("disconnect", () => callback())`
+onDisconnect
+  :: forall ns
+   . NamespaceHandle ns
+  -> Effect Unit
+  -> Effect Unit
+onDisconnect handle callback =
+  primOnDisconnect (socketRefFromHandle handle) callback
+
+-- | Get the unique Socket.io ID for a client connection.
+-- |
+-- | Useful for tracking connected clients in a `Ref` or `Map`.
+-- | The ID is assigned by Socket.io and is unique per connection.
+-- |
+-- | Internally reads `socket.id`.
+socketId
+  :: forall ns
+   . NamespaceHandle ns
+  -> String
+socketId handle = primSocketId (socketRefFromHandle handle)
+
 -- | Close a Socket.io server, terminating all connections.
 -- |
 -- | Internally calls `server.close()`.
@@ -165,5 +195,9 @@ foreign import primOnConnection :: ServerSocket -> String -> (SocketRef -> Effec
 foreign import primOnEvent :: forall a. SocketRef -> String -> (a -> Effect Unit) -> Effect Unit
 
 foreign import primOnCallEvent :: forall a r. SocketRef -> String -> (a -> Effect r) -> Effect Unit
+
+foreign import primOnDisconnect :: SocketRef -> Effect Unit -> Effect Unit
+
+foreign import primSocketId :: SocketRef -> String
 
 foreign import primCloseServer :: ServerSocket -> Effect Unit
