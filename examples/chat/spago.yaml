@@ -1,0 +1,11 @@
+package:
+  name: chat-example
+  dependencies:
+    - pursocket
+    - prelude
+    - effect
+    - aff
+    - console
+    - refs
+    - arrays
+    - maybe
