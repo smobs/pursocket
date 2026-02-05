@@ -9,7 +9,6 @@ output-es/
 
 # Node
 node_modules/
-package-lock.json
 
 # Build artifacts
 dist/
