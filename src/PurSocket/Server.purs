@@ -13,6 +13,15 @@
 -- |   only listen for client-to-server events.
 -- |
 -- | Attempting to violate these constraints produces a compile error.
+-- |
+-- | **FFI trust boundary.** The foreign `prim*` functions at the bottom
+-- | of this module use `forall a` for payload parameters because the
+-- | PureScript FFI cannot express protocol-validated types at the JS
+-- | boundary.  Type safety for payloads is enforced entirely by the
+-- | `IsValidMsg` and `IsValidCall` constraints in the public API
+-- | wrappers above.  Do not call `prim*` functions directly — they
+-- | bypass all protocol validation and will accept any value,
+-- | including ones that violate the protocol contract.
 module PurSocket.Server
   ( broadcast
   , emitTo
@@ -27,6 +36,7 @@ module PurSocket.Server
   , socketId
   , createServer
   , createServerWithPort
+  , createServerWithHttpServer
   , closeServer
   , module ReExports
   ) where
@@ -35,6 +45,7 @@ import Prelude
 
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Effect (Effect)
+import Foreign (Foreign)
 import PurSocket.Framework (NamespaceHandle, SocketRef, class IsValidMsg, class IsValidCall)
 import PurSocket.Internal (ServerSocket) as ReExports
 import PurSocket.Internal (ServerSocket, mkNamespaceHandle, socketRefFromHandle)
@@ -49,6 +60,12 @@ createServer = primCreateServer
 -- | Create a Socket.io server listening on the given port.
 createServerWithPort :: Int -> Effect ServerSocket
 createServerWithPort = primCreateServerWithPort
+
+-- | Create a Socket.io server attached to an existing Node.js HTTP server.
+-- | The HTTP server must already be listening (or will be started separately).
+-- | The `Foreign` argument should be a Node `http.Server` instance.
+createServerWithHttpServer :: Foreign -> Effect ServerSocket
+createServerWithHttpServer = primCreateServerWithHttpServer
 
 -- | Broadcast a fire-and-forget message to all clients connected to
 -- | namespace `ns`.  The event must exist as a `Msg` in the protocol's
@@ -308,6 +325,8 @@ closeServer = primCloseServer
 foreign import primCreateServer :: Effect ServerSocket
 
 foreign import primCreateServerWithPort :: Int -> Effect ServerSocket
+
+foreign import primCreateServerWithHttpServer :: Foreign -> Effect ServerSocket
 
 foreign import primBroadcast :: forall a. ServerSocket -> String -> String -> a -> Effect Unit
 

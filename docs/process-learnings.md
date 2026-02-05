@@ -32,3 +32,16 @@ Accumulated learnings from project cycles. Check these before starting new work.
 **Building:** Building a real application exposed 2 library API gaps that integration tests missed. Test suite validates protocol correctness but not application completeness. Pre-build API checklists would catch this earlier.
 
 **Documentation:** Demo onboarding (3 commands) works, but "start your own project" path is undocumented. Server bootstrap, client bundling, and Effect calling convention are all invisible steps. Document the glue, not just the API.
+
+### 2026-02-04 — emitTo and Room Support
+
+**From Team Proposals:**
+- Build Questions Log template for capturing implementation decisions during build (proposed by purescript-specialist)
+- PureScript API Gotchas cheat-sheet for stdlib pitfalls like `Ref.modify` semantics (proposed by qa)
+- Socket.io FFI semantics reference documenting transient operators, promise handling, and adapter compatibility (proposed by web-tech-expert)
+
+**Shaping:** Exhaustive Q&A (18 questions, 6 contributors) eliminated all design ambiguity. Build was pure execution — zero fix commits, zero design decisions during build. When shaping is this thorough, appetite can be much shorter than the default.
+
+**Building:** Retro note files were created but not used. Empty templates don't get filled. Structured prompts ("what did you decide and why?") are more likely to capture knowledge. The QA agent's `Ref.modify` issue was noted in a slice progress log but not in the retro file — different capture points have different friction levels.
+
+**Testing:** Negative delivery assertions are essential for delivery-mode functions. A positive-only test for `emitTo` would pass even if the implementation were `broadcast`. The QA team's insistence on both positive AND negative assertions in the DoD was the right call.

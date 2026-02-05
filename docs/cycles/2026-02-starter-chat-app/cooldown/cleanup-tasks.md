@@ -8,7 +8,7 @@
 
 | Total | Pending | In Progress | Complete | Deferred |
 |-------|---------|-------------|----------|----------|
-| 9 | 2 | 0 | 6 | 1 |
+| 9 | 0 | 0 | 7 | 2 |
 
 ## Tasks
 
@@ -23,10 +23,10 @@
 | # | Action | Proposed By | Effort | Owner | Status |
 |---|--------|-------------|--------|-------|--------|
 | I1 | Create pre-build API checklist template for future cycles | purescript-specialist | small | self | complete | 2026-02-04 |
-| I2 | Add `attachToHttpServer` function to PurSocket.Server (same as Task 3) | web-tech-expert | small | team | pending |
+| I2 | Add `attachToHttpServer` function to PurSocket.Server (same as Task 3) | web-tech-expert | small | team | deferred -- same as Task 3 |
 | I3 | Add config file convention for negative test subdirectories | qa | small | self | complete | 2026-02-04 |
 | I4 | Create docs/GETTING_STARTED.md guide | product-manager | small | team | complete | 2026-02-04 |
-| I5 | Audit Socket.io API surface — keep/defer/never decisions | architect | small | self | pending |
+| I5 | Audit Socket.io API surface — keep/defer/never decisions | architect | small | self | complete | 2026-02-04 |
 | I6 | Add "New Project Setup" section to README | external-user | small | self | complete | 2026-02-04 |
 
 **Note:** I2 and Task 3 overlap — completing Task 3 satisfies I2. I4 and I6 overlap — both address onboarding documentation. They complement each other (GETTING_STARTED.md for full guide, README section for quick reference).
@@ -51,7 +51,7 @@
 
 | # | Task | Type | Effort | Status |
 |---|------|------|--------|--------|
-| I5 | Audit Socket.io API surface — keep/defer/never decisions | improvement | small | pending |
+| I5 | Audit Socket.io API surface — keep/defer/never decisions | improvement | small | complete |
 
 ### product-manager
 

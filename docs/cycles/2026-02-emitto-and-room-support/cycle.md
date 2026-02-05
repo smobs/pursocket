@@ -1,6 +1,6 @@
 ---
 name: "emitTo and Room Support"
-phase: shipped
+phase: completed
 appetite: "6 weeks"
 started: "2026-02-04"
 bet_date: "2026-02-04"
@@ -34,3 +34,12 @@ See [shaping/bet-decision.md](shaping/bet-decision.md) for risk profile and bett
 |-----|------|-------|
 | `cycle-emitto-and-room-support-start` | 2026-02-04 | Build phase started |
 | `cycle-emitto-and-room-support-end` | 2026-02-04 | Shipped |
+
+## Timeline
+
+| Date | Event |
+|------|-------|
+| 2026-02-04 | Bet placed, build started |
+| 2026-02-04 | Shipped (5 functions, 27 tests, 9 negative compile tests) |
+| 2026-02-04 | Cooldown started |
+| 2026-02-04 | Cooldown complete (6/6 cleanup tasks done) |

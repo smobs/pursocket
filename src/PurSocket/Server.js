@@ -8,6 +8,9 @@ export const primCreateServer = () => new Server();
 export const primCreateServerWithPort = (port) => () =>
   new Server(port, { cors: { origin: "*" } });
 
+export const primCreateServerWithHttpServer = (httpServer) => () =>
+  new Server(httpServer, { cors: { origin: "*" } });
+
 export const primBroadcast = (io) => (ns) => (event) => (payload) => () => {
   io.of("/" + ns).emit(event, payload);
 };

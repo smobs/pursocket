@@ -7,6 +7,7 @@ package:
     - console
     - maybe
     - either
+    - foreign
     - typelevel-prelude
   test:
     main: Test.Main
