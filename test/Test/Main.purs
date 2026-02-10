@@ -208,29 +208,29 @@ testConnectType = const unit connectRef
 testJoinNsType :: Unit
 testJoinNsType = const unit joinNsRef
   where
-  joinNsRef :: SocketRef -> Effect (NamespaceHandle "lobby")
-  joinNsRef = Client.joinNs @"lobby"
+  joinNsRef :: SocketRef -> Effect (NamespaceHandle AppProtocol "lobby")
+  joinNsRef = Client.joinNs @AppProtocol @"lobby"
 
 -- | Proves that `emit` resolves IsValidMsg for c2s events.
 testEmitType :: Unit
 testEmitType = const unit emitRef
   where
-  emitRef :: NamespaceHandle "lobby" -> { text :: String } -> Effect Unit
-  emitRef = Client.emit @AppProtocol @"lobby" @"chat"
+  emitRef :: NamespaceHandle AppProtocol "lobby" -> { text :: String } -> Effect Unit
+  emitRef = Client.emit @"chat"
 
 -- | Proves that `call` resolves IsValidCall for c2s events.
 testCallType :: Unit
 testCallType = const unit callRef
   where
-  callRef :: NamespaceHandle "lobby" -> { name :: String } -> Aff { success :: Boolean }
-  callRef = Client.call @AppProtocol @"lobby" @"join"
+  callRef :: NamespaceHandle AppProtocol "lobby" -> { name :: String } -> Aff { success :: Boolean }
+  callRef = Client.call @"join"
 
 -- | Proves that `callWithTimeout` accepts a custom timeout.
 testCallWithTimeoutType :: Unit
 testCallWithTimeoutType = const unit callRef
   where
-  callRef :: NamespaceHandle "lobby" -> Int -> { name :: String } -> Aff { success :: Boolean }
-  callRef = Client.callWithTimeout @AppProtocol @"lobby" @"join"
+  callRef :: NamespaceHandle AppProtocol "lobby" -> Int -> { name :: String } -> Aff { success :: Boolean }
+  callRef = Client.callWithTimeout @"join"
 
 -- ---------------------------------------------------------------------------
 -- Negative compile tests documentation.

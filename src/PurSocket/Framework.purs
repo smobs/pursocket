@@ -69,7 +69,8 @@ foreign import data SocketRef :: Type
 -- | only.  Library consumers should treat `NamespaceHandle` as opaque
 -- | and obtain instances only via `join` (Client) or `onConnection`
 -- | (Server).
-data NamespaceHandle (ns :: Symbol) = NamespaceHandle SocketRef
+data NamespaceHandle :: forall k. k -> Symbol -> Type
+data NamespaceHandle protocol (ns :: Symbol) = NamespaceHandle SocketRef
 
 -- ---------------------------------------------------------------------------
 -- Level 1: LookupNamespace

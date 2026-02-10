@@ -20,9 +20,9 @@ foreign import data ServerSocket :: Type
 
 -- | Construct a `NamespaceHandle` from an opaque socket reference.
 -- | This is the only way to create a handle outside of Framework.
-mkNamespaceHandle :: forall ns. SocketRef -> NamespaceHandle ns
+mkNamespaceHandle :: forall protocol ns. SocketRef -> NamespaceHandle protocol ns
 mkNamespaceHandle = NamespaceHandle
 
 -- | Extract the underlying socket reference from a handle.
-socketRefFromHandle :: forall ns. NamespaceHandle ns -> SocketRef
+socketRefFromHandle :: forall protocol ns. NamespaceHandle protocol ns -> SocketRef
 socketRefFromHandle (NamespaceHandle ref) = ref

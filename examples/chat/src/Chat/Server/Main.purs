@@ -28,7 +28,7 @@ startChat :: ServerSocket -> Effect Unit
 startChat server = do
   usersRef <- Ref.new ([] :: Array User)
 
-  onConnection @"chat" server \handle -> do
+  onConnection @ChatProtocol @"chat" server \handle -> do
     let sid = socketId handle
     let defaultNick = "anon-" <> sid
     Ref.modify_ (\us -> Array.snoc us { id: sid, nickname: defaultNick }) usersRef
@@ -40,7 +40,7 @@ startChat server = do
       { users: map _.nickname users }
 
     -- Handle nickname changes (Call with acknowledgement)
-    onCallEvent @ChatProtocol @"chat" @"setNickname" handle \payload -> do
+    onCallEvent @"setNickname" handle \payload -> do
       currentUsers <- Ref.read usersRef
       let taken = Array.any (\u -> u.nickname == payload.nickname) currentUsers
       if taken
@@ -52,12 +52,12 @@ startChat server = do
           pure { ok: true, reason: "" }
 
     -- Handle incoming messages
-    onEvent @ChatProtocol @"chat" @"sendMessage" handle \payload -> do
+    onEvent @"sendMessage" handle \payload -> do
       currentUsers <- Ref.read usersRef
       let sender = case Array.find (\u -> u.id == sid) currentUsers of
             Nothing -> defaultNick
             Just u  -> u.nickname
-      broadcastExceptSender @ChatProtocol @"chat" @"newMessage" handle
+      broadcastExceptSender @"newMessage" handle
         { sender, text: payload.text }
 
     -- Handle disconnect

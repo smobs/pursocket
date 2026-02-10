@@ -53,23 +53,21 @@ connect = primConnect
 
 -- | Join a namespace, obtaining a `NamespaceHandle` capability token.
 -- |
--- | The type-level `ns` parameter (a `Symbol`) identifies which
--- | namespace to connect to.  At runtime, `reflectSymbol` converts
--- | this to a string and the FFI creates a new Socket.io connection
--- | to `baseUrl + "/" + ns`.
--- |
--- | The base URL is extracted from the socket returned by `connect`
--- | via `socket.io.uri` on the JS side.
+-- | The type-level `protocol` parameter pins the protocol type into
+-- | the handle, so all subsequent `emit`/`call`/`onMsg` calls infer
+-- | it automatically.  The `ns` parameter identifies which namespace
+-- | to connect to.
 -- |
 -- | Example:
 -- | ```purescript
--- | lobby <- joinNs @"lobby" socket
+-- | lobby <- joinNs @AppProtocol @"lobby" socket
+-- | emit @"chat" lobby { text: "Hello!" }   -- protocol inferred from handle
 -- | ```
 joinNs
-  :: forall @ns
+  :: forall @protocol @ns
    . IsSymbol ns
   => SocketRef
-  -> Effect (NamespaceHandle ns)
+  -> Effect (NamespaceHandle protocol ns)
 joinNs baseSocket = do
   nsSocket <- primJoin baseSocket nsStr
   pure (mkNamespaceHandle nsSocket)
@@ -79,22 +77,21 @@ joinNs baseSocket = do
 -- | Emit a fire-and-forget message on the given namespace.
 -- |
 -- | The event must exist as a `Msg` in the protocol's `c2s` direction
--- | for the namespace identified by the handle.  This is enforced at
--- | compile time by the `IsValidMsg` constraint -- attempting to emit
--- | an event that does not exist, or emitting in the wrong direction,
--- | produces a compile error with a descriptive message.
+-- | for the namespace identified by the handle.  The protocol and
+-- | namespace are inferred from the handle — only `@event` needs to
+-- | be specified at the call site.
 -- |
 -- | Internally calls `socket.emit(eventName, payload)`.
 -- |
 -- | Example:
 -- | ```purescript
--- | emit @AppProtocol @"lobby" @"chat" lobby { text: "Hello!" }
+-- | emit @"chat" lobby { text: "Hello!" }
 -- | ```
 emit
-  :: forall @protocol @ns @event payload
+  :: forall @event protocol ns payload
    . IsValidMsg protocol ns event "c2s" payload
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> payload
   -> Effect Unit
 emit handle payload =
@@ -113,14 +110,13 @@ emit handle payload =
 -- |
 -- | Example:
 -- | ```purescript
--- | res <- call @AppProtocol @"lobby" @"join" lobby { name: "Alice" }
--- | -- res :: { success :: Boolean }
+-- | res <- call @"join" lobby { name: "Alice" }
 -- | ```
 call
-  :: forall @protocol @ns @event payload res
+  :: forall @event protocol ns payload res
    . IsValidCall protocol ns event "c2s" payload res
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> payload
   -> Aff res
 call handle payload = makeAff \callback -> do
@@ -138,13 +134,13 @@ call handle payload = makeAff \callback -> do
 -- |
 -- | Example:
 -- | ```purescript
--- | res <- callWithTimeout @AppProtocol @"lobby" @"join" lobby 10000 { name: "Alice" }
+-- | res <- callWithTimeout @"join" lobby 10000 { name: "Alice" }
 -- | ```
 callWithTimeout
-  :: forall @protocol @ns @event payload res
+  :: forall @event protocol ns payload res
    . IsValidCall protocol ns event "c2s" payload res
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> Int
   -> payload
   -> Aff res
@@ -159,21 +155,21 @@ callWithTimeout handle timeout payload = makeAff \callback -> do
 -- | Listen for a server-to-client message on the given namespace.
 -- |
 -- | The event must exist as a `Msg` in the protocol's `s2c` direction
--- | for the namespace identified by the handle.  This is the client-side
--- | counterpart to `Server.broadcast`.
+-- | for the namespace identified by the handle.  The protocol and
+-- | namespace are inferred from the handle.
 -- |
 -- | Internally calls `socket.on(event, (data) => callback(data)())`.
 -- |
 -- | Example:
 -- | ```purescript
--- | onMsg @AppProtocol @"lobby" @"userCount" handle \payload ->
+-- | onMsg @"userCount" handle \payload ->
 -- |   log (show payload.count)
 -- | ```
 onMsg
-  :: forall @protocol @ns @event payload
+  :: forall @event protocol ns payload
    . IsValidMsg protocol ns event "s2c" payload
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> (payload -> Effect Unit)
   -> Effect Unit
 onMsg handle callback =

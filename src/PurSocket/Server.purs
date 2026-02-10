@@ -37,12 +37,16 @@ module PurSocket.Server
   , createServer
   , createServerWithPort
   , createServerWithHttpServer
+  , createServerWith
+  , defaultServerConfig
+  , ServerConfig
   , closeServer
   , module ReExports
   ) where
 
 import Prelude
 
+import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Effect (Effect)
 import Foreign (Foreign)
@@ -66,6 +70,51 @@ createServerWithPort = primCreateServerWithPort
 -- | The `Foreign` argument should be a Node `http.Server` instance.
 createServerWithHttpServer :: Foreign -> Effect ServerSocket
 createServerWithHttpServer = primCreateServerWithHttpServer
+
+-- | Server configuration record for `createServerWith`.
+-- | Uses `Maybe` fields for optional parameters and sensible defaults.
+type ServerConfig =
+  { port         :: Maybe Int
+  , httpServer   :: Maybe Foreign
+  , cors         :: { origin :: String }
+  , path         :: String
+  , pingTimeout  :: Int
+  , pingInterval :: Int
+  }
+
+-- | Default server configuration.  Override fields using record update syntax:
+-- | ```purescript
+-- | createServerWith (defaultServerConfig { port = Just 3000 })
+-- | ```
+defaultServerConfig :: ServerConfig
+defaultServerConfig =
+  { port: Nothing
+  , httpServer: Nothing
+  , cors: { origin: "*" }
+  , path: "/socket.io"
+  , pingTimeout: 20000
+  , pingInterval: 25000
+  }
+
+-- | Create a Socket.io server with full configuration.
+-- |
+-- | Dispatches to the appropriate FFI constructor based on which optional
+-- | fields are set (`httpServer` takes priority over `port`).
+-- |
+-- | Example:
+-- | ```purescript
+-- | server <- createServerWith (defaultServerConfig { port = Just 3000 })
+-- | server <- createServerWith (defaultServerConfig { httpServer = Just myHttp, cors = { origin: "http://localhost:5173" } })
+-- | ```
+createServerWith :: ServerConfig -> Effect ServerSocket
+createServerWith config = case config.httpServer of
+  Just hs -> primCreateServerWithHttpServerAndOpts hs optsRecord
+  Nothing -> case config.port of
+    Just p  -> primCreateServerWithPortAndOpts p optsRecord
+    Nothing -> primCreateServerWithOpts optsRecord
+  where
+  optsRecord = { cors: config.cors, path: config.path
+               , pingTimeout: config.pingTimeout, pingInterval: config.pingInterval }
 
 -- | Broadcast a fire-and-forget message to all clients connected to
 -- | namespace `ns`.  The event must exist as a `Msg` in the protocol's
@@ -108,13 +157,13 @@ broadcast server payload =
 -- |
 -- | Example:
 -- | ```purescript
--- | emitTo @AppProtocol @"chat" @"privateMsg" recipientHandle { text: "hello" }
+-- | emitTo @"privateMsg" recipientHandle { text: "hello" }
 -- | ```
 emitTo
-  :: forall @protocol @ns @event payload
+  :: forall @event protocol ns payload
    . IsValidMsg protocol ns event "s2c" payload
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> payload
   -> Effect Unit
 emitTo handle payload =
@@ -135,14 +184,14 @@ emitTo handle payload =
 -- |
 -- | Example:
 -- | ```purescript
--- | onEvent @AppProtocol @"chat" @"sendMessage" handle \msg ->
--- |   broadcastExceptSender @AppProtocol @"chat" @"newMessage" handle msg
+-- | onEvent @"sendMessage" handle \msg ->
+-- |   broadcastExceptSender @"newMessage" handle msg
 -- | ```
 broadcastExceptSender
-  :: forall @protocol @ns @event payload
+  :: forall @event protocol ns payload
    . IsValidMsg protocol ns event "s2c" payload
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> payload
   -> Effect Unit
 broadcastExceptSender handle payload =
@@ -160,7 +209,7 @@ broadcastExceptSender handle payload =
 -- | adapter support.
 -- |
 -- | Internally performs: `socket.join(room)` (promise discarded).
-joinRoom :: forall ns. NamespaceHandle ns -> String -> Effect Unit
+joinRoom :: forall protocol ns. NamespaceHandle protocol ns -> String -> Effect Unit
 joinRoom handle room =
   primJoinRoom (socketRefFromHandle handle) room
 
@@ -173,7 +222,7 @@ joinRoom handle room =
 -- | adapter support.
 -- |
 -- | Internally performs: `socket.leave(room)` (promise discarded).
-leaveRoom :: forall ns. NamespaceHandle ns -> String -> Effect Unit
+leaveRoom :: forall protocol ns. NamespaceHandle protocol ns -> String -> Effect Unit
 leaveRoom handle room =
   primLeaveRoom (socketRefFromHandle handle) room
 
@@ -192,13 +241,13 @@ leaveRoom handle room =
 -- | Example:
 -- | ```purescript
 -- | joinRoom handle "game-42"
--- | broadcastToRoom @AppProtocol @"game" @"playerJoined" handle "game-42" { name: "Alice" }
+-- | broadcastToRoom @"playerJoined" handle "game-42" { name: "Alice" }
 -- | ```
 broadcastToRoom
-  :: forall @protocol @ns @event payload
+  :: forall @event protocol ns payload
    . IsValidMsg protocol ns event "s2c" payload
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> String
   -> payload
   -> Effect Unit
@@ -219,15 +268,15 @@ broadcastToRoom handle room payload =
 -- |
 -- | Example:
 -- | ```purescript
--- | onConnection @"lobby" server \handle -> do
--- |   onEvent @AppProtocol @"lobby" @"chat" handle \payload ->
+-- | onConnection @AppProtocol @"lobby" server \handle -> do
+-- |   onEvent @"chat" handle \payload ->
 -- |     log payload.text
 -- | ```
 onConnection
-  :: forall @ns
+  :: forall @protocol @ns
    . IsSymbol ns
   => ServerSocket
-  -> (NamespaceHandle ns -> Effect Unit)
+  -> (NamespaceHandle protocol ns -> Effect Unit)
   -> Effect Unit
 onConnection server callback =
   primOnConnection server nsStr wrappedCallback
@@ -245,14 +294,14 @@ onConnection server callback =
 -- |
 -- | Example:
 -- | ```purescript
--- | onEvent @AppProtocol @"lobby" @"chat" handle \payload ->
+-- | onEvent @"chat" handle \payload ->
 -- |   log payload.text
 -- | ```
 onEvent
-  :: forall @protocol @ns @event payload
+  :: forall @event protocol ns payload
    . IsValidMsg protocol ns event "c2s" payload
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> (payload -> Effect Unit)
   -> Effect Unit
 onEvent handle callback =
@@ -269,14 +318,14 @@ onEvent handle callback =
 -- |
 -- | Example:
 -- | ```purescript
--- | onCallEvent @AppProtocol @"lobby" @"join" handle \payload ->
+-- | onCallEvent @"join" handle \payload ->
 -- |   pure { success: true }
 -- | ```
 onCallEvent
-  :: forall @protocol @ns @event payload res
+  :: forall @event protocol ns payload res
    . IsValidCall protocol ns event "c2s" payload res
   => IsSymbol event
-  => NamespaceHandle ns
+  => NamespaceHandle protocol ns
   -> (payload -> Effect res)
   -> Effect Unit
 onCallEvent handle handler =
@@ -293,8 +342,8 @@ onCallEvent handle handler =
 -- |
 -- | Internally performs: `socket.on("disconnect", () => callback())`
 onDisconnect
-  :: forall ns
-   . NamespaceHandle ns
+  :: forall protocol ns
+   . NamespaceHandle protocol ns
   -> Effect Unit
   -> Effect Unit
 onDisconnect handle callback =
@@ -307,8 +356,8 @@ onDisconnect handle callback =
 -- |
 -- | Internally reads `socket.id`.
 socketId
-  :: forall ns
-   . NamespaceHandle ns
+  :: forall protocol ns
+   . NamespaceHandle protocol ns
   -> String
 socketId handle = primSocketId (socketRefFromHandle handle)
 
@@ -351,3 +400,9 @@ foreign import primJoinRoom :: SocketRef -> String -> Effect Unit
 foreign import primLeaveRoom :: SocketRef -> String -> Effect Unit
 
 foreign import primBroadcastToRoom :: forall a. SocketRef -> String -> String -> a -> Effect Unit
+
+foreign import primCreateServerWithOpts :: forall opts. { | opts } -> Effect ServerSocket
+
+foreign import primCreateServerWithPortAndOpts :: forall opts. Int -> { | opts } -> Effect ServerSocket
+
+foreign import primCreateServerWithHttpServerAndOpts :: forall opts. Foreign -> { | opts } -> Effect ServerSocket

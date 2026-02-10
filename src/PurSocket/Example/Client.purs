@@ -20,8 +20,8 @@
 -- | main = launchAff_ do
 -- |   socket <- liftEffect $ connect "http://localhost:3000"
 -- |   lobby <- liftEffect $ join @"lobby" socket
--- |   liftEffect $ emit @AppProtocol @"lobby" @"chat" lobby { text: "Hello!" }
--- |   res <- call @AppProtocol @"lobby" @"join" lobby { name: "Alice" }
+-- |   liftEffect $ emit @"chat" lobby { text: "Hello!" }
+-- |   res <- call @"join" lobby { name: "Alice" }
 -- |   liftEffect $ log ("Join result: " <> show res.success)
 -- | ```
 module PurSocket.Example.Client
@@ -58,11 +58,11 @@ import PurSocket.Example.Protocol (AppProtocol)
 -- |    demonstrating multi-namespace usage.
 -- |
 -- | Type safety examples:
--- |   - `emit @AppProtocol @"lobby" @"chat" lobby { text: "Hello!" }`
+-- |   - `emit @"chat" lobby { text: "Hello!" }`
 -- |     compiles because "chat" is a c2s Msg in "lobby".
--- |   - `emit @AppProtocol @"lobby" @"move" lobby { x: 1, y: 1 }`
+-- |   - `emit @"move" lobby { x: 1, y: 1 }`
 -- |     would NOT compile because "move" is in "game", not "lobby".
--- |   - `emit @AppProtocol @"lobby" @"userCount" lobby { count: 1 }`
+-- |   - `emit @"userCount" lobby { count: 1 }`
 -- |     would NOT compile because "userCount" is s2c, not c2s.
 exampleClient :: Effect Unit
 exampleClient = launchAff_ exampleClientAff
@@ -78,13 +78,13 @@ exampleClientAff = do
   -- The type-level parameter @"lobby" is reflected to the string
   -- "/lobby" at runtime.  The returned `NamespaceHandle "lobby"`
   -- is a capability token scoped to this namespace.
-  lobby <- liftEffect $ joinNs @"lobby" socket
+  lobby <- liftEffect $ joinNs @AppProtocol @"lobby" socket
 
   -- Emit a fire-and-forget chat message.
   -- The IsValidMsg constraint resolves:
   --   AppProtocol -> "lobby" -> "chat" -> "c2s" -> { text :: String }
   -- The payload type is inferred from the protocol.
-  liftEffect $ emit @AppProtocol @"lobby" @"chat" lobby { text: "Hello from PurSocket!" }
+  liftEffect $ emit @"chat" lobby { text: "Hello from PurSocket!" }
 
   -- Call "join" with an acknowledgement.
   -- The IsValidCall constraint resolves:
@@ -92,12 +92,12 @@ exampleClientAff = do
   --     -> payload: { name :: String }
   --     -> response: { success :: Boolean }
   -- The response type is inferred automatically.
-  res <- call @AppProtocol @"lobby" @"join" lobby { name: "Alice" }
+  res <- call @"join" lobby { name: "Alice" }
   liftEffect $ log ("Join successful: " <> show res.success)
 
   -- Join the "game" namespace and emit a move.
   -- Demonstrates that multiple namespaces can be used independently,
   -- each with its own handle and its own set of valid events.
-  game <- liftEffect $ joinNs @"game" socket
-  liftEffect $ emit @AppProtocol @"game" @"move" game { x: 10, y: 20 }
+  game <- liftEffect $ joinNs @AppProtocol @"game" socket
+  liftEffect $ emit @"move" game { x: 10, y: 20 }
   liftEffect $ log "Move emitted to game namespace"

@@ -24,56 +24,56 @@ import PurSocket.Framework (NamespaceHandle)
 
 -- | Connect to the server and join the "chat" namespace.
 -- | Takes a callback that receives the NamespaceHandle on success.
-connectChat :: (NamespaceHandle "chat" -> Effect Unit) -> Effect Unit
+connectChat :: (NamespaceHandle ChatProtocol "chat" -> Effect Unit) -> Effect Unit
 connectChat cb = do
   socket <- connect "http://localhost:3000"
-  handle <- joinNs @"chat" socket
+  handle <- joinNs @ChatProtocol @"chat" socket
   cb handle
 
--- | Send a chat message. Wraps `emit @ChatProtocol @"chat" @"sendMessage"`.
-sendMessage :: NamespaceHandle "chat" -> String -> Effect Unit
+-- | Send a chat message. Wraps `emit @"sendMessage"`.
+sendMessage :: NamespaceHandle ChatProtocol "chat" -> String -> Effect Unit
 sendMessage handle text =
-  emit @ChatProtocol @"chat" @"sendMessage" handle { text }
+  emit @"sendMessage" handle { text }
 
 -- | Set nickname via Call (request/response). Takes a callback for the result
 -- | since `call` returns Aff.
 setNicknameCb
-  :: NamespaceHandle "chat"
+  :: NamespaceHandle ChatProtocol "chat"
   -> String
   -> ({ ok :: Boolean, reason :: String } -> Effect Unit)
   -> Effect Unit
 setNicknameCb handle nickname cb = launchAff_ do
-  res <- call @ChatProtocol @"chat" @"setNickname" handle { nickname }
+  res <- call @"setNickname" handle { nickname }
   liftEffect $ cb res
 
 -- | Listen for new messages from the server.
 onNewMessage
-  :: NamespaceHandle "chat"
+  :: NamespaceHandle ChatProtocol "chat"
   -> ({ sender :: String, text :: String } -> Effect Unit)
   -> Effect Unit
 onNewMessage handle cb =
-  onMsg @ChatProtocol @"chat" @"newMessage" handle cb
+  onMsg @"newMessage" handle cb
 
 -- | Listen for user joined events.
 onUserJoined
-  :: NamespaceHandle "chat"
+  :: NamespaceHandle ChatProtocol "chat"
   -> ({ nickname :: String } -> Effect Unit)
   -> Effect Unit
 onUserJoined handle cb =
-  onMsg @ChatProtocol @"chat" @"userJoined" handle cb
+  onMsg @"userJoined" handle cb
 
 -- | Listen for user left events.
 onUserLeft
-  :: NamespaceHandle "chat"
+  :: NamespaceHandle ChatProtocol "chat"
   -> ({ nickname :: String } -> Effect Unit)
   -> Effect Unit
 onUserLeft handle cb =
-  onMsg @ChatProtocol @"chat" @"userLeft" handle cb
+  onMsg @"userLeft" handle cb
 
 -- | Listen for active users list updates.
 onActiveUsers
-  :: NamespaceHandle "chat"
+  :: NamespaceHandle ChatProtocol "chat"
   -> ({ users :: Array String } -> Effect Unit)
   -> Effect Unit
 onActiveUsers handle cb =
-  onMsg @ChatProtocol @"chat" @"activeUsers" handle cb
+  onMsg @"activeUsers" handle cb

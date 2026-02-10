@@ -77,3 +77,12 @@ export const primLeaveRoom = (socket) => (room) => () => {
 export const primBroadcastToRoom = (socket) => (room) => (event) => (payload) => () => {
   socket.to(room).emit(event, payload);
 };
+
+// primCreateServerWithOpts :: Record opts -> Effect ServerSocket
+export const primCreateServerWithOpts = (opts) => () => new Server(opts);
+
+// primCreateServerWithPortAndOpts :: Int -> Record opts -> Effect ServerSocket
+export const primCreateServerWithPortAndOpts = (port) => (opts) => () => new Server(port, opts);
+
+// primCreateServerWithHttpServerAndOpts :: Foreign -> Record opts -> Effect ServerSocket
+export const primCreateServerWithHttpServerAndOpts = (hs) => (opts) => () => new Server(hs, opts);

@@ -54,8 +54,8 @@ import PurSocket.Server (createServerWithPort, onConnection, onEvent, broadcast)
 -- | Type safety examples:
 -- |   - `broadcast @AppProtocol @"lobby" @"userCount"` compiles
 -- |     because "userCount" is an s2c Msg in the "lobby" namespace.
--- |   - `onEvent @AppProtocol @"lobby" @"chat"` compiles because
--- |     "chat" is a c2s Msg in the "lobby" namespace.
+-- |   - `onEvent @"chat" handle` compiles because
+-- |     "chat" is a c2s Msg and the handle carries the "lobby" protocol.
 -- |   - `broadcast @AppProtocol @"lobby" @"chat"` would NOT compile
 -- |     because "chat" is c2s, not s2c.
 exampleServer :: Effect Unit
@@ -64,12 +64,12 @@ exampleServer = do
 
   -- Handle connections on the "lobby" namespace.
   -- The type parameter @"lobby" is validated against AppProtocol.
-  onConnection @"lobby" server \handle -> do
+  onConnection @AppProtocol @"lobby" server \handle -> do
 
     -- Listen for "chat" messages from clients.
     -- The constraint IsValidMsg AppProtocol "lobby" "chat" "c2s" payload
     -- resolves payload to { text :: String }.
-    onEvent @AppProtocol @"lobby" @"chat" handle \payload ->
+    onEvent @"chat" handle \payload ->
       log ("Chat message received: " <> payload.text)
 
     -- Broadcast the user count to all connected clients.
@@ -78,9 +78,9 @@ exampleServer = do
     broadcast @AppProtocol @"lobby" @"userCount" server { count: 1 }
 
   -- Handle connections on the "game" namespace.
-  onConnection @"game" server \handle -> do
+  onConnection @AppProtocol @"game" server \handle -> do
 
     -- Listen for "move" events from clients.
     -- payload resolves to { x :: Int, y :: Int }.
-    onEvent @AppProtocol @"game" @"move" handle \payload ->
+    onEvent @"move" handle \payload ->
       log ("Move received: (" <> show payload.x <> ", " <> show payload.y <> ")")

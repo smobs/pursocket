@@ -41,7 +41,7 @@ waitForConnect sock = makeAff \callback -> do
 
 -- | Wait for a NamespaceHandle's underlying socket to connect.
 -- | The namespace socket (from `join`) has its own connect lifecycle.
-waitForNsConnect :: forall ns. NamespaceHandle ns -> Aff Unit
+waitForNsConnect :: forall protocol ns. NamespaceHandle protocol ns -> Aff Unit
 waitForNsConnect _ = do
   -- Small delay to let the namespace connection establish.
   -- Socket.io namespace connections are near-instant over localhost,
@@ -60,8 +60,8 @@ integrationSpec = do
         receivedRef <- liftEffect $ Ref.new ""
 
         -- Register the server-side handler BEFORE client connects
-        liftEffect $ Server.onConnection @"lobby" server \handle -> do
-          Server.onEvent @AppProtocol @"lobby" @"chat" handle \payload -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
+          Server.onEvent @"chat" handle \payload -> do
             Ref.write payload.text receivedRef
 
         -- Connect client
@@ -69,11 +69,11 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join namespace
-        lobby <- liftEffect $ Client.joinNs @"lobby" sock
+        lobby <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sock
         liftAff $ waitForNsConnect lobby
 
         -- Emit a message
-        liftEffect $ Client.emit @AppProtocol @"lobby" @"chat" lobby { text: "hello integration" }
+        liftEffect $ Client.emit @"chat" lobby { text: "hello integration" }
 
         -- Give the server time to receive the message
         liftAff $ delay (Milliseconds 200.0)
@@ -97,7 +97,7 @@ integrationSpec = do
 
         -- Use onConnection to know when the client has connected,
         -- then broadcast from there to guarantee delivery.
-        liftEffect $ Server.onConnection @"lobby" server \_ -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \_ -> do
           Server.broadcast @AppProtocol @"lobby" @"userCount" server { count: 42 }
 
         -- Connect client
@@ -105,13 +105,13 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join namespace
-        lobby <- liftEffect $ Client.joinNs @"lobby" sock
+        lobby <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sock
 
         -- Set up client-side listener for s2c messages BEFORE the
         -- namespace connection completes.  The socket from join
         -- auto-connects; we register the listener immediately so
         -- we don't miss the broadcast.
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobby \payload -> do
+        liftEffect $ Client.onMsg @"userCount" lobby \payload -> do
           Ref.write payload.count receivedRef
 
         -- Give time for connection + broadcast + delivery
@@ -132,8 +132,8 @@ integrationSpec = do
         server <- liftEffect $ Server.createServerWithPort (testPort + 2)
 
         -- Register the server-side call handler
-        liftEffect $ Server.onConnection @"lobby" server \handle -> do
-          Server.onCallEvent @AppProtocol @"lobby" @"join" handle \payload -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
+          Server.onCallEvent @"join" handle \payload -> do
             log ("Call received from: " <> payload.name)
             pure { success: true }
 
@@ -142,11 +142,11 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join namespace
-        lobby <- liftEffect $ Client.joinNs @"lobby" sock
+        lobby <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sock
         liftAff $ waitForNsConnect lobby
 
         -- Make the call
-        res <- Client.call @AppProtocol @"lobby" @"join" lobby { name: "Alice" }
+        res <- Client.call @"join" lobby { name: "Alice" }
 
         -- Verify response
         res.success `shouldEqual` true
@@ -166,8 +166,8 @@ integrationSpec = do
         yRef <- liftEffect $ Ref.new 0
 
         -- Register the server-side event handler on "game" namespace
-        liftEffect $ Server.onConnection @"game" server \handle -> do
-          Server.onEvent @AppProtocol @"game" @"move" handle \payload -> do
+        liftEffect $ Server.onConnection @AppProtocol @"game" server \handle -> do
+          Server.onEvent @"move" handle \payload -> do
             Ref.write payload.x xRef
             Ref.write payload.y yRef
 
@@ -176,11 +176,11 @@ integrationSpec = do
         liftAff $ waitForConnect sock
 
         -- Join game namespace
-        game <- liftEffect $ Client.joinNs @"game" sock
+        game <- liftEffect $ Client.joinNs @AppProtocol @"game" sock
         liftAff $ waitForNsConnect game
 
         -- Emit a move
-        liftEffect $ Client.emit @AppProtocol @"game" @"move" game { x: 7, y: 13 }
+        liftEffect $ Client.emit @"move" game { x: 7, y: 13 }
 
         -- Give the server time to receive
         liftAff $ delay (Milliseconds 200.0)
@@ -207,8 +207,8 @@ integrationSpec = do
         server <- liftEffect $ Server.createServerWithPort (testPort + 4)
 
         -- Server-side handle storage
-        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
-        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
+        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
+        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
         connectionCount <- liftEffect $ Ref.new 0
 
         -- Client-side received data (sentinel = 0)
@@ -217,7 +217,7 @@ integrationSpec = do
 
         -- Server: store handles as clients connect sequentially
         -- Ref.modify returns the NEW value: 1 for first connection, 2 for second
-        liftEffect $ Server.onConnection @"lobby" server \handle -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
           n <- Ref.modify (_ + 1) connectionCount
           case n of
             1 -> Ref.write (Just handle) handleARef
@@ -228,16 +228,16 @@ integrationSpec = do
         -- Connect client A
         sockA <- liftEffect $ Client.connect url4
         liftAff $ waitForConnect sockA
-        lobbyA <- liftEffect $ Client.joinNs @"lobby" sockA
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyA \p ->
+        lobbyA <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockA
+        liftEffect $ Client.onMsg @"userCount" lobbyA \p ->
           Ref.write p.count receivedA
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client B (sequential to guarantee handle ordering)
         sockB <- liftEffect $ Client.connect url4
         liftAff $ waitForConnect sockB
-        lobbyB <- liftEffect $ Client.joinNs @"lobby" sockB
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyB \p ->
+        lobbyB <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockB
+        liftEffect $ Client.onMsg @"userCount" lobbyB \p ->
           Ref.write p.count receivedB
         liftAff $ delay (Milliseconds 200.0)
 
@@ -245,7 +245,7 @@ integrationSpec = do
         mHandleA <- liftEffect $ Ref.read handleARef
         case mHandleA of
           Nothing -> "handle A was stored" `shouldEqual` "handle A missing"
-          Just hA -> liftEffect $ Server.emitTo @AppProtocol @"lobby" @"userCount" hA { count: 99 }
+          Just hA -> liftEffect $ Server.emitTo @"userCount" hA { count: 99 }
 
         liftAff $ delay (Milliseconds 300.0)
 
@@ -267,7 +267,7 @@ integrationSpec = do
         server <- liftEffect $ Server.createServerWithPort (testPort + 5)
 
         -- Server-side handle storage
-        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
+        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
         connectionCount <- liftEffect $ Ref.new 0
 
         -- Client-side received data (sentinel = 0)
@@ -276,14 +276,14 @@ integrationSpec = do
 
         -- Server: store first handle, set up broadcastExceptSender on chat event
         -- Ref.modify returns the NEW value: 1 for first connection, 2 for second
-        liftEffect $ Server.onConnection @"lobby" server \handle -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
           n <- Ref.modify (_ + 1) connectionCount
           case n of
             1 -> do
               Ref.write (Just handle) handleARef
               -- When client A sends a chat message, broadcastExceptSender
-              Server.onEvent @AppProtocol @"lobby" @"chat" handle \_ ->
-                Server.broadcastExceptSender @AppProtocol @"lobby" @"userCount" handle { count: 77 }
+              Server.onEvent @"chat" handle \_ ->
+                Server.broadcastExceptSender @"userCount" handle { count: 77 }
             _ -> pure unit
 
         let url5 = "http://localhost:" <> show (testPort + 5)
@@ -291,21 +291,21 @@ integrationSpec = do
         -- Connect client A
         sockA <- liftEffect $ Client.connect url5
         liftAff $ waitForConnect sockA
-        lobbyA <- liftEffect $ Client.joinNs @"lobby" sockA
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyA \p ->
+        lobbyA <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockA
+        liftEffect $ Client.onMsg @"userCount" lobbyA \p ->
           Ref.write p.count receivedA
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client B
         sockB <- liftEffect $ Client.connect url5
         liftAff $ waitForConnect sockB
-        lobbyB <- liftEffect $ Client.joinNs @"lobby" sockB
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyB \p ->
+        lobbyB <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockB
+        liftEffect $ Client.onMsg @"userCount" lobbyB \p ->
           Ref.write p.count receivedB
         liftAff $ delay (Milliseconds 200.0)
 
         -- Client A sends a chat message, which triggers broadcastExceptSender on server
-        liftEffect $ Client.emit @AppProtocol @"lobby" @"chat" lobbyA { text: "trigger" }
+        liftEffect $ Client.emit @"chat" lobbyA { text: "trigger" }
 
         liftAff $ delay (Milliseconds 300.0)
 
@@ -332,9 +332,9 @@ integrationSpec = do
         server <- liftEffect $ Server.createServerWithPort (testPort + 6)
 
         -- Server-side handle storage
-        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
-        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
-        handleCRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
+        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
+        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
+        handleCRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
         connectionCount <- liftEffect $ Ref.new 0
 
         -- Client-side received data (sentinel = 0)
@@ -344,7 +344,7 @@ integrationSpec = do
 
         -- Server: store handles, join A and B to "r1"
         -- Ref.modify returns the NEW value: 1, 2, 3, ...
-        liftEffect $ Server.onConnection @"lobby" server \handle -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
           n <- Ref.modify (_ + 1) connectionCount
           case n of
             1 -> do
@@ -360,24 +360,24 @@ integrationSpec = do
         -- Connect client A
         sockA <- liftEffect $ Client.connect url6
         liftAff $ waitForConnect sockA
-        lobbyA <- liftEffect $ Client.joinNs @"lobby" sockA
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyA \p ->
+        lobbyA <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockA
+        liftEffect $ Client.onMsg @"userCount" lobbyA \p ->
           Ref.write p.count receivedA
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client B
         sockB <- liftEffect $ Client.connect url6
         liftAff $ waitForConnect sockB
-        lobbyB <- liftEffect $ Client.joinNs @"lobby" sockB
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyB \p ->
+        lobbyB <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockB
+        liftEffect $ Client.onMsg @"userCount" lobbyB \p ->
           Ref.write p.count receivedB
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client C (not in any room)
         sockC <- liftEffect $ Client.connect url6
         liftAff $ waitForConnect sockC
-        lobbyC <- liftEffect $ Client.joinNs @"lobby" sockC
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyC \p ->
+        lobbyC <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockC
+        liftEffect $ Client.onMsg @"userCount" lobbyC \p ->
           Ref.write p.count receivedC
         liftAff $ delay (Milliseconds 200.0)
 
@@ -386,7 +386,7 @@ integrationSpec = do
         case mHandleA of
           Nothing -> "handle A was stored" `shouldEqual` "handle A missing"
           Just hA -> liftEffect $
-            Server.broadcastToRoom @AppProtocol @"lobby" @"userCount" hA "r1" { count: 55 }
+            Server.broadcastToRoom @"userCount" hA "r1" { count: 55 }
 
         liftAff $ delay (Milliseconds 300.0)
 
@@ -418,9 +418,9 @@ integrationSpec = do
         server <- liftEffect $ Server.createServerWithPort (testPort + 7)
 
         -- Server-side handle storage
-        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
-        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
-        handleCRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
+        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
+        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
+        handleCRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
         connectionCount <- liftEffect $ Ref.new 0
 
         -- Client-side received data (sentinel = 0)
@@ -430,7 +430,7 @@ integrationSpec = do
 
         -- Server: store handles, join all to "r1"
         -- Ref.modify returns the NEW value: 1, 2, 3, ...
-        liftEffect $ Server.onConnection @"lobby" server \handle -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
           n <- Ref.modify (_ + 1) connectionCount
           case n of
             1 -> do
@@ -448,24 +448,24 @@ integrationSpec = do
         -- Connect client A
         sockA <- liftEffect $ Client.connect url7
         liftAff $ waitForConnect sockA
-        lobbyA <- liftEffect $ Client.joinNs @"lobby" sockA
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyA \p ->
+        lobbyA <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockA
+        liftEffect $ Client.onMsg @"userCount" lobbyA \p ->
           Ref.write p.count receivedA
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client B
         sockB <- liftEffect $ Client.connect url7
         liftAff $ waitForConnect sockB
-        lobbyB <- liftEffect $ Client.joinNs @"lobby" sockB
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyB \p ->
+        lobbyB <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockB
+        liftEffect $ Client.onMsg @"userCount" lobbyB \p ->
           Ref.write p.count receivedB
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client C
         sockC <- liftEffect $ Client.connect url7
         liftAff $ waitForConnect sockC
-        lobbyC <- liftEffect $ Client.joinNs @"lobby" sockC
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyC \p ->
+        lobbyC <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockC
+        liftEffect $ Client.onMsg @"userCount" lobbyC \p ->
           Ref.write p.count receivedC
         liftAff $ delay (Milliseconds 200.0)
 
@@ -482,7 +482,7 @@ integrationSpec = do
         case mHandleB of
           Nothing -> "handle B was stored" `shouldEqual` "handle B missing"
           Just hB -> liftEffect $
-            Server.broadcastToRoom @AppProtocol @"lobby" @"userCount" hB "r1" { count: 66 }
+            Server.broadcastToRoom @"userCount" hB "r1" { count: 66 }
 
         liftAff $ delay (Milliseconds 300.0)
 
@@ -512,9 +512,9 @@ integrationSpec = do
         server <- liftEffect $ Server.createServerWithPort (testPort + 8)
 
         -- Server-side handle storage
-        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
-        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
-        handleCRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle "lobby"))
+        handleARef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
+        handleBRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
+        handleCRef <- liftEffect $ Ref.new (Nothing :: Maybe (NamespaceHandle AppProtocol "lobby"))
         connectionCount <- liftEffect $ Ref.new 0
 
         -- Client-side received data: track which count value each client got
@@ -525,7 +525,7 @@ integrationSpec = do
         -- Server: store handles, set up rooms
         -- A and C in "r1", B and C in "r2"
         -- Ref.modify returns the NEW value: 1, 2, 3, ...
-        liftEffect $ Server.onConnection @"lobby" server \handle -> do
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
           n <- Ref.modify (_ + 1) connectionCount
           case n of
             1 -> do
@@ -544,23 +544,23 @@ integrationSpec = do
         -- Connect client A (in r1 only)
         sockA <- liftEffect $ Client.connect url8
         liftAff $ waitForConnect sockA
-        lobbyA <- liftEffect $ Client.joinNs @"lobby" sockA
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyA \p ->
+        lobbyA <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockA
+        liftEffect $ Client.onMsg @"userCount" lobbyA \p ->
           Ref.write p.count receivedA
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client B (in r2 only)
         sockB <- liftEffect $ Client.connect url8
         liftAff $ waitForConnect sockB
-        lobbyB <- liftEffect $ Client.joinNs @"lobby" sockB
-        liftEffect $ Client.onMsg @AppProtocol @"lobby" @"userCount" lobbyB \p ->
+        lobbyB <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockB
+        liftEffect $ Client.onMsg @"userCount" lobbyB \p ->
           Ref.write p.count receivedB
         liftAff $ delay (Milliseconds 200.0)
 
         -- Connect client C (in both r1 and r2, will be sender)
         sockC <- liftEffect $ Client.connect url8
         liftAff $ waitForConnect sockC
-        _lobbyC <- liftEffect $ Client.joinNs @"lobby" sockC
+        _lobbyC <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sockC
         liftAff $ delay (Milliseconds 200.0)
 
         -- Server broadcastToRoom "r1" using C's handle
@@ -570,7 +570,7 @@ integrationSpec = do
           Just hC -> do
             -- Broadcast to r1: A should receive (in r1, not sender), B should NOT (not in r1)
             liftEffect $
-              Server.broadcastToRoom @AppProtocol @"lobby" @"userCount" hC "r1" { count: 11 }
+              Server.broadcastToRoom @"userCount" hC "r1" { count: 11 }
 
             liftAff $ delay (Milliseconds 300.0)
 
@@ -586,7 +586,7 @@ integrationSpec = do
 
             -- Broadcast to r2: B should receive (in r2, not sender), A should NOT (not in r2)
             liftEffect $
-              Server.broadcastToRoom @AppProtocol @"lobby" @"userCount" hC "r2" { count: 22 }
+              Server.broadcastToRoom @"userCount" hC "r2" { count: 22 }
 
             liftAff $ delay (Milliseconds 300.0)
 
