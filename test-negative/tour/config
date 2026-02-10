@@ -1,0 +1,4 @@
+# Extra source globs for tour negative tests.
+# These are relative to the project root and passed to `purs compile`
+# alongside src/**/*.purs and .spago dependencies.
+examples/chat/src/**/*.purs
