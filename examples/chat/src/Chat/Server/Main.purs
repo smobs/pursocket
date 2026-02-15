@@ -1,7 +1,7 @@
 -- | Chat server protocol handlers. Uses PurSocket API against ChatProtocol.
 -- | Receives a pre-configured Socket.io server from start-server.mjs
 -- | and sets up all protocol handlers.
-module Chat.Server.Main (startChat) where
+module Chat.Server.Main (startChat, startChatBun) where
 
 import Prelude
 
@@ -19,6 +19,8 @@ import PurSocket.Server
   , socketId
   , broadcast
   , broadcastExceptSender
+  , BunEngine
+  , createServerWithBunEngine
   )
 import PurSocket.Internal (ServerSocket)
 
@@ -74,3 +76,10 @@ startChat server = do
             { users: map _.nickname remaining }
 
   log "Chat protocol handlers registered"
+
+-- | Bun entry point: creates a Socket.io server from a Bun engine
+-- | and sets up all chat handlers.
+startChatBun :: BunEngine -> Effect Unit
+startChatBun engine = do
+  server <- createServerWithBunEngine engine
+  startChat server

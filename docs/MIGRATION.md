@@ -102,31 +102,80 @@ These don't use type applications at call sites, so they work as before. Only ex
 
 ---
 
-## New: `createServerWith` config API
+## `ServerConfig` refactor: `ServerTarget` sum type
 
-Three new exports from `PurSocket.Server`: `ServerConfig`, `defaultServerConfig`, and `createServerWith`. The existing `createServer`, `createServerWithPort`, and `createServerWithHttpServer` remain unchanged.
+`ServerConfig` no longer uses `Maybe` fields for `port` and `httpServer`. These have been replaced by a single `target :: ServerTarget` field that makes invalid combinations unrepresentable (you can no longer set both `port` and `httpServer`).
+
+### New type: `ServerTarget`
 
 ```purescript
-import PurSocket.Server (createServerWith, defaultServerConfig)
-
--- Standalone (equivalent to createServer)
-server <- createServerWith defaultServerConfig
-
--- With port + CORS
-server <- createServerWith
-  (defaultServerConfig { port = Just 3000, cors = { origin: "http://localhost:5173" } })
-
--- Attach to HTTP server with custom ping settings
-server <- createServerWith
-  (defaultServerConfig { httpServer = Just myHttpServer, pingTimeout = 30000 })
+data ServerTarget
+  = Standalone            -- no port, no HTTP server
+  | OnPort Int            -- listen on a port
+  | AttachedTo HttpServer -- attach to existing Node.js HTTP server
+  | BoundTo BunEngine     -- bind to a @socket.io/bun-engine instance
 ```
 
-`ServerConfig` fields:
+### New opaque types: `HttpServer`, `BunEngine`
+
+`Foreign` is no longer used. `HttpServer` and `BunEngine` are opaque foreign types — the JS call sites are unchanged, only PureScript type annotations change.
+
+### `ServerConfig` field changes
+
+| Before | After |
+|--------|-------|
+| `port :: Maybe Int` | removed — use `target: OnPort p` |
+| `httpServer :: Maybe Foreign` | removed — use `target: AttachedTo hs` |
+| _(n/a)_ | `target :: ServerTarget` (new) |
+| `cors`, `path`, `pingTimeout`, `pingInterval` | unchanged |
+
+### `createServerWith` migration
+
+```purescript
+-- Before
+server <- createServerWith defaultServerConfig
+server <- createServerWith (defaultServerConfig { port = Just 3000 })
+server <- createServerWith (defaultServerConfig { httpServer = Just myHttp })
+
+-- After
+server <- createServerWith defaultServerConfig
+server <- createServerWith (defaultServerConfig { target = OnPort 3000 })
+server <- createServerWith (defaultServerConfig { target = AttachedTo myHttp })
+```
+
+### `createServerWithHttpServer` migration
+
+The function signature changes from `Foreign` to `HttpServer`:
+
+```purescript
+-- Before
+import Foreign (Foreign)
+mainWithHttpServer :: Foreign -> Effect Unit
+
+-- After
+import PurSocket.Server (HttpServer)
+mainWithHttpServer :: HttpServer -> Effect Unit
+```
+
+JS call sites are unchanged — `HttpServer` is an opaque type backed by the same JS object.
+
+### New: `createServerWithBunEngine`
+
+```purescript
+import PurSocket.Server (BunEngine, createServerWithBunEngine)
+
+mainBun :: BunEngine -> Effect Unit
+mainBun engine = do
+  server <- createServerWithBunEngine engine
+  -- all handler functions work identically
+  setupHandlers server
+```
+
+### Current `ServerConfig` fields
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| `port` | `Maybe Int` | `Nothing` | Listen on this port |
-| `httpServer` | `Maybe Foreign` | `Nothing` | Attach to existing HTTP server (takes priority over `port`) |
+| `target` | `ServerTarget` | `Standalone` | How the server binds to the network |
 | `cors` | `{ origin :: String }` | `{ origin: "*" }` | CORS origin setting |
 | `path` | `String` | `"/socket.io"` | Socket.io path |
 | `pingTimeout` | `Int` | `20000` | Ping timeout in ms |
@@ -134,9 +183,87 @@ server <- createServerWith
 
 ---
 
+## Bun engine support
+
+PurSocket now supports `@socket.io/bun-engine` as an alternative to Node.js HTTP. The engine is created in JavaScript and passed to PureScript — all handler functions (`onConnection`, `onEvent`, `broadcast`, etc.) work identically regardless of engine.
+
+### Architecture
+
+```
+JS entry point               PureScript
+─────────────                ──────────
+new Engine(...)  ──engine──>  createServerWithBunEngine engine
+                              ↓
+engine.handler() ←──────────  ServerSocket (same type as Node path)
+  ↓                           ↓
+Bun.serve({                   onConnection, onEvent, broadcast, ...
+  fetch, websocket             (all unchanged)
+})
+```
+
+### Whispers-in-the-Mist relay server
+
+Add a `mainBun` export alongside the existing `mainWithHttpServer`:
+
+```purescript
+import PurSocket.Server (BunEngine, createServerWithBunEngine)
+
+mainBun :: BunEngine -> Effect Unit
+mainBun engine = do
+  state <- newRelayState
+  analytics <- initAnalytics
+  server <- createServerWithBunEngine engine
+  setupHandlers server state analytics
+```
+
+Create `start-server-bun.mjs`:
+
+```javascript
+import { Server as Engine } from "@socket.io/bun-engine";
+import { mainBun } from '../../output/Main/index.js';
+
+const engine = new Engine({ path: "/socket.io/", pingInterval: 25000 });
+mainBun(engine)();
+
+const { websocket } = engine.handler();
+
+export default {
+  port: process.env.PORT || 3020,
+  hostname: '0.0.0.0',
+  idleTimeout: 30,
+  fetch(req, server) {
+    const url = new URL(req.url);
+    if (url.pathname.startsWith('/socket.io/'))
+      return engine.handleRequest(req, server);
+    // Static files via Bun.file()...
+  },
+  websocket,
+};
+```
+
+Add to `package.json`:
+
+```json
+"dependencies": { "@socket.io/bun-engine": "^0.1.0" },
+"scripts": { "dev:bun": "bun run generate-maps && spago build && bun run bundle && bun packages/relay-server/start-server-bun.mjs" }
+```
+
+### What does NOT change
+
+| Component | Why |
+|-----------|-----|
+| `PurSocket.Framework` | Protocol validation is transport-agnostic |
+| `PurSocket.Client` | Connects via URL, unaware of server engine |
+| `PurSocket.Internal` | `ServerSocket` type is unchanged |
+| All handler functions | Operate on `ServerSocket` regardless of engine |
+| `Whispers/Relay/Handlers.purs` | `setupHandlers` takes `ServerSocket` |
+| `start-server.mjs` | Preserved as the Node.js entry point |
+
+---
+
 ## Quick-reference: find-and-replace patterns
 
-For mechanical migration, apply these replacements in order:
+### Protocol-aware handles (from earlier migration)
 
 | Find | Replace | Scope |
 |------|---------|-------|
@@ -154,3 +281,14 @@ For mechanical migration, apply these replacements in order:
 | `NamespaceHandle "ns"` | `NamespaceHandle AppProtocol "ns"` | Type annotations |
 
 Replace `AppProtocol` with your own protocol type alias throughout.
+
+### ServerTarget refactor
+
+| Find | Replace | Scope |
+|------|---------|-------|
+| `import Foreign (Foreign)` | `import PurSocket.Server (HttpServer)` | Server config |
+| `Foreign -> Effect` | `HttpServer -> Effect` | Type annotations |
+| `port = Just 3000` | `target = OnPort 3000` | ServerConfig |
+| `httpServer = Just hs` | `target = AttachedTo hs` | ServerConfig |
+| `port: Nothing` | `target: Standalone` | ServerConfig |
+| `httpServer: Nothing` | _(remove, not needed)_ | ServerConfig |

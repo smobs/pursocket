@@ -84,5 +84,15 @@ export const primCreateServerWithOpts = (opts) => () => new Server(opts);
 // primCreateServerWithPortAndOpts :: Int -> Record opts -> Effect ServerSocket
 export const primCreateServerWithPortAndOpts = (port) => (opts) => () => new Server(port, opts);
 
-// primCreateServerWithHttpServerAndOpts :: Foreign -> Record opts -> Effect ServerSocket
+// primCreateServerWithHttpServerAndOpts :: HttpServer -> Record opts -> Effect ServerSocket
 export const primCreateServerWithHttpServerAndOpts = (hs) => (opts) => () => new Server(hs, opts);
+
+// primCreateServerWithBunEngine :: BunEngine -> Record opts -> Effect ServerSocket
+// The engine is created externally in JS; PureScript passes it in.
+// Transport-level settings (pingTimeout, pingInterval) are configured on the
+// engine at creation time — only CORS is relevant to the Socket.IO Server here.
+export const primCreateServerWithBunEngine = (engine) => (opts) => () => {
+  const io = new Server({ cors: opts.cors });
+  io.bind(engine);
+  return io;
+};

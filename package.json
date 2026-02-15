@@ -9,11 +9,13 @@
     "bundle": "node scripts/bundle-browser.mjs",
     "chat:build": "spago build -p chat-example && npx esbuild output-es/Chat.Client.Main/index.js --bundle --format=esm --platform=browser --outfile=examples/chat/static/client.bundle.js",
     "chat:start": "node examples/chat/start-server.mjs",
-    "chat": "npm run chat:build && npm run chat:start"
+    "chat": "npm run chat:build && npm run chat:start",
+    "chat:bun": "npm run chat:build && bun examples/chat/start-server-bun.mjs"
   },
   "dependencies": {
     "socket.io": "^4.7.0",
-    "socket.io-client": "^4.7.0"
+    "socket.io-client": "^4.7.0",
+    "@socket.io/bun-engine": "^0.1.0"
   },
   "devDependencies": {
     "esbuild": "^0.20.0",

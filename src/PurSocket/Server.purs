@@ -37,23 +37,40 @@ module PurSocket.Server
   , createServer
   , createServerWithPort
   , createServerWithHttpServer
+  , createServerWithBunEngine
   , createServerWith
   , defaultServerConfig
   , ServerConfig
+  , ServerTarget(..)
+  , HttpServer
+  , BunEngine
   , closeServer
   , module ReExports
   ) where
 
 import Prelude
 
-import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Effect (Effect)
-import Foreign (Foreign)
 import PurSocket.Framework (NamespaceHandle, SocketRef, class IsValidMsg, class IsValidCall)
 import PurSocket.Internal (ServerSocket) as ReExports
 import PurSocket.Internal (ServerSocket, mkNamespaceHandle, socketRefFromHandle)
 import Type.Proxy (Proxy(..))
+
+-- | An opaque type representing a Node.js `http.Server` instance.
+foreign import data HttpServer :: Type
+
+-- | An opaque type representing a `@socket.io/bun-engine` `Server` instance.
+foreign import data BunEngine :: Type
+
+-- | Specifies how the Socket.io server binds to the network.
+-- | Using a sum type prevents invalid combinations (e.g. setting both
+-- | a port and an HTTP server simultaneously).
+data ServerTarget
+  = Standalone
+  | OnPort Int
+  | AttachedTo HttpServer
+  | BoundTo BunEngine
 
 -- | Create a standalone Socket.io server with no HTTP server attached.
 -- | The server will not listen on any port until `listen` is called
@@ -67,15 +84,21 @@ createServerWithPort = primCreateServerWithPort
 
 -- | Create a Socket.io server attached to an existing Node.js HTTP server.
 -- | The HTTP server must already be listening (or will be started separately).
--- | The `Foreign` argument should be a Node `http.Server` instance.
-createServerWithHttpServer :: Foreign -> Effect ServerSocket
-createServerWithHttpServer = primCreateServerWithHttpServer
+createServerWithHttpServer :: HttpServer -> Effect ServerSocket
+createServerWithHttpServer hs =
+  createServerWith (defaultServerConfig { target = AttachedTo hs })
+
+-- | Create a Socket.io server powered by a `@socket.io/bun-engine` instance.
+-- | The engine is created in JavaScript via `new Engine(...)` and passed in.
+createServerWithBunEngine :: BunEngine -> Effect ServerSocket
+createServerWithBunEngine eng =
+  createServerWith (defaultServerConfig { target = BoundTo eng })
 
 -- | Server configuration record for `createServerWith`.
--- | Uses `Maybe` fields for optional parameters and sensible defaults.
+-- | The `target` field uses a sum type to prevent invalid combinations
+-- | (e.g. setting both a port and an HTTP server).
 type ServerConfig =
-  { port         :: Maybe Int
-  , httpServer   :: Maybe Foreign
+  { target       :: ServerTarget
   , cors         :: { origin :: String }
   , path         :: String
   , pingTimeout  :: Int
@@ -84,12 +107,11 @@ type ServerConfig =
 
 -- | Default server configuration.  Override fields using record update syntax:
 -- | ```purescript
--- | createServerWith (defaultServerConfig { port = Just 3000 })
+-- | createServerWith (defaultServerConfig { target = OnPort 3000 })
 -- | ```
 defaultServerConfig :: ServerConfig
 defaultServerConfig =
-  { port: Nothing
-  , httpServer: Nothing
+  { target: Standalone
   , cors: { origin: "*" }
   , path: "/socket.io"
   , pingTimeout: 20000
@@ -98,23 +120,22 @@ defaultServerConfig =
 
 -- | Create a Socket.io server with full configuration.
 -- |
--- | Dispatches to the appropriate FFI constructor based on which optional
--- | fields are set (`httpServer` takes priority over `port`).
+-- | Dispatches to the appropriate FFI constructor based on `target`.
 -- |
 -- | Example:
 -- | ```purescript
--- | server <- createServerWith (defaultServerConfig { port = Just 3000 })
--- | server <- createServerWith (defaultServerConfig { httpServer = Just myHttp, cors = { origin: "http://localhost:5173" } })
+-- | server <- createServerWith (defaultServerConfig { target = OnPort 3000 })
+-- | server <- createServerWith (defaultServerConfig { target = AttachedTo myHttp, cors = { origin: "http://localhost:5173" } })
 -- | ```
 createServerWith :: ServerConfig -> Effect ServerSocket
-createServerWith config = case config.httpServer of
-  Just hs -> primCreateServerWithHttpServerAndOpts hs optsRecord
-  Nothing -> case config.port of
-    Just p  -> primCreateServerWithPortAndOpts p optsRecord
-    Nothing -> primCreateServerWithOpts optsRecord
+createServerWith config = case config.target of
+  Standalone    -> primCreateServerWithOpts opts
+  OnPort p      -> primCreateServerWithPortAndOpts p opts
+  AttachedTo hs -> primCreateServerWithHttpServerAndOpts hs opts
+  BoundTo eng   -> primCreateServerWithBunEngine eng opts
   where
-  optsRecord = { cors: config.cors, path: config.path
-               , pingTimeout: config.pingTimeout, pingInterval: config.pingInterval }
+  opts = { cors: config.cors, path: config.path
+         , pingTimeout: config.pingTimeout, pingInterval: config.pingInterval }
 
 -- | Broadcast a fire-and-forget message to all clients connected to
 -- | namespace `ns`.  The event must exist as a `Msg` in the protocol's
@@ -375,7 +396,7 @@ foreign import primCreateServer :: Effect ServerSocket
 
 foreign import primCreateServerWithPort :: Int -> Effect ServerSocket
 
-foreign import primCreateServerWithHttpServer :: Foreign -> Effect ServerSocket
+foreign import primCreateServerWithHttpServer :: HttpServer -> Effect ServerSocket
 
 foreign import primBroadcast :: forall a. ServerSocket -> String -> String -> a -> Effect Unit
 
@@ -405,4 +426,6 @@ foreign import primCreateServerWithOpts :: forall opts. { | opts } -> Effect Ser
 
 foreign import primCreateServerWithPortAndOpts :: forall opts. Int -> { | opts } -> Effect ServerSocket
 
-foreign import primCreateServerWithHttpServerAndOpts :: forall opts. Foreign -> { | opts } -> Effect ServerSocket
+foreign import primCreateServerWithHttpServerAndOpts :: forall opts. HttpServer -> { | opts } -> Effect ServerSocket
+
+foreign import primCreateServerWithBunEngine :: forall opts. BunEngine -> { | opts } -> Effect ServerSocket
