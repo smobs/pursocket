@@ -41,6 +41,11 @@ export const primOnConnect = (socket) => (callback) => () => {
   socket.on("connect", () => callback());
 };
 
+// primOnDisconnect :: SocketRef -> (String -> Effect Unit) -> Effect Unit
+export const primOnDisconnect = (socket) => (callback) => () => {
+  socket.on("disconnect", (reason) => callback(reason)());
+};
+
 // primDisconnect :: SocketRef -> Effect Unit
 export const primDisconnect = (socket) => () => {
   socket.disconnect();

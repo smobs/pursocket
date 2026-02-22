@@ -22,8 +22,11 @@ module PurSocket.Client
   , callWithTimeout
   , onMsg
   , onConnect
+  , onDisconnect
   , disconnect
   , defaultTimeout
+  , DisconnectReason(..)
+  , willAutoReconnect
   ) where
 
 import Prelude
@@ -40,6 +43,33 @@ import Type.Proxy (Proxy(..))
 -- | Default timeout for `call` in milliseconds.
 defaultTimeout :: Int
 defaultTimeout = 5000
+
+-- | Reason for a socket disconnection.
+-- | Mirrors Socket.io v4 disconnect reasons.
+data DisconnectReason
+  = ServerDisconnect     -- ^ "io server disconnect" -- server forced disconnect (no auto-reconnect)
+  | ClientDisconnect     -- ^ "io client disconnect" -- client called disconnect (no auto-reconnect)
+  | TransportClose       -- ^ "transport close" -- connection lost (will auto-reconnect)
+  | TransportError       -- ^ "transport error" -- connection error (will auto-reconnect)
+  | PingTimeout          -- ^ "ping timeout" -- heartbeat failed (will auto-reconnect)
+  | UnknownReason String -- ^ Future-proof catch-all (assumes auto-reconnect)
+
+-- | Parse a Socket.io disconnect reason string into a DisconnectReason.
+parseDisconnectReason :: String -> DisconnectReason
+parseDisconnectReason = case _ of
+  "io server disconnect" -> ServerDisconnect
+  "io client disconnect" -> ClientDisconnect
+  "transport close" -> TransportClose
+  "transport error" -> TransportError
+  "ping timeout" -> PingTimeout
+  other -> UnknownReason other
+
+-- | Whether Socket.io will automatically attempt to reconnect after this disconnect.
+-- | Returns false for ServerDisconnect and ClientDisconnect (intentional disconnects).
+willAutoReconnect :: DisconnectReason -> Boolean
+willAutoReconnect ServerDisconnect = false
+willAutoReconnect ClientDisconnect = false
+willAutoReconnect _ = true
 
 -- | Connect to a Socket.io server at the given URL.
 -- |
@@ -186,6 +216,16 @@ onMsg handle callback =
 onConnect :: SocketRef -> Effect Unit -> Effect Unit
 onConnect = primOnConnect
 
+-- | Register a callback that fires when the socket disconnects.
+-- |
+-- | The callback receives a `DisconnectReason` indicating why the
+-- | disconnection occurred and whether Socket.io will auto-reconnect.
+-- |
+-- | Internally calls `socket.on("disconnect", (reason) => callback(reason))`.
+onDisconnect :: SocketRef -> (DisconnectReason -> Effect Unit) -> Effect Unit
+onDisconnect socket callback =
+  primOnDisconnect socket (\reasonStr -> callback (parseDisconnectReason reasonStr))
+
 -- | Disconnect a socket from the server.
 -- |
 -- | Internally calls `socket.disconnect()`.
@@ -217,6 +257,9 @@ foreign import primOnMsg :: forall a. SocketRef -> String -> (a -> Effect Unit) 
 
 -- | Listen for the "connect" event.  Wraps `socket.on("connect", callback)`.
 foreign import primOnConnect :: SocketRef -> Effect Unit -> Effect Unit
+
+-- | Listen for the "disconnect" event.  Wraps `socket.on("disconnect", callback)`.
+foreign import primOnDisconnect :: SocketRef -> (String -> Effect Unit) -> Effect Unit
 
 -- | Disconnect a socket.  Wraps `socket.disconnect()`.
 foreign import primDisconnect :: SocketRef -> Effect Unit
