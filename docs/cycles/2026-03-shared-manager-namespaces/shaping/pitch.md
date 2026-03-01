@@ -1,6 +1,6 @@
 ---
 name: "Shared Manager for Namespace Connections"
-status: refining
+status: bet
 drafter: "@web-tech-expert"
 contributors: ["@web-tech-expert", "@architect", "@qa", "@purescript-specialist", "@external-user"]
 open_questions: 0
