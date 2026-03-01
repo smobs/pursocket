@@ -20,6 +20,7 @@ import Data.Time.Duration (Milliseconds(..))
 import PurSocket.Client as Client
 import PurSocket.Server as Server
 import PurSocket.Framework (NamespaceHandle, SocketRef)
+import PurSocket.Internal (socketRefFromHandle)
 import PurSocket.Example.Protocol (AppProtocol)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
@@ -601,5 +602,87 @@ integrationSpec = do
         liftEffect $ Client.disconnect sockA
         liftEffect $ Client.disconnect sockB
         liftEffect $ Client.disconnect sockC
+        liftEffect $ Server.closeServer server
+        liftAff $ delay (Milliseconds 100.0)
+
+    describe "shared Manager" do
+      it "multiple namespaces on same connection can independently emit and receive" do
+        server <- liftEffect $ Server.createServerWithPort (testPort + 9)
+
+        -- Server-side capture refs
+        chatRef <- liftEffect $ Ref.new ""
+        moveXRef <- liftEffect $ Ref.new 0
+        moveYRef <- liftEffect $ Ref.new 0
+
+        -- Register handlers on both namespaces
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \handle -> do
+          Server.onEvent @"chat" handle \payload ->
+            Ref.write payload.text chatRef
+
+        liftEffect $ Server.onConnection @AppProtocol @"game" server \handle -> do
+          Server.onEvent @"move" handle \payload -> do
+            Ref.write payload.x moveXRef
+            Ref.write payload.y moveYRef
+
+        -- Single client connection
+        let url9 = "http://localhost:" <> show (testPort + 9)
+        sock <- liftEffect $ Client.connect url9
+        liftAff $ waitForConnect sock
+
+        -- Join BOTH namespaces on the SAME base socket
+        lobby <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sock
+        game <- liftEffect $ Client.joinNs @AppProtocol @"game" sock
+        liftAff $ delay (Milliseconds 200.0)
+
+        -- Emit on both
+        liftEffect $ Client.emit @"chat" lobby { text: "shared manager" }
+        liftEffect $ Client.emit @"move" game { x: 42, y: 99 }
+
+        liftAff $ delay (Milliseconds 300.0)
+
+        -- Verify both namespaces received independently
+        chat <- liftEffect $ Ref.read chatRef
+        chat `shouldEqual` "shared manager"
+        mx <- liftEffect $ Ref.read moveXRef
+        mx `shouldEqual` 42
+        my <- liftEffect $ Ref.read moveYRef
+        my `shouldEqual` 99
+
+        -- Cleanup
+        liftEffect $ Client.disconnect sock
+        liftEffect $ Server.closeServer server
+        liftAff $ delay (Milliseconds 100.0)
+
+      it "disconnecting one namespace does not affect the other" do
+        server <- liftEffect $ Server.createServerWithPort (testPort + 10)
+
+        moveRef <- liftEffect $ Ref.new 0
+
+        liftEffect $ Server.onConnection @AppProtocol @"lobby" server \_ -> pure unit
+        liftEffect $ Server.onConnection @AppProtocol @"game" server \handle -> do
+          Server.onEvent @"move" handle \payload ->
+            Ref.write payload.x moveRef
+
+        let url10 = "http://localhost:" <> show (testPort + 10)
+        sock <- liftEffect $ Client.connect url10
+        liftAff $ waitForConnect sock
+
+        lobby <- liftEffect $ Client.joinNs @AppProtocol @"lobby" sock
+        game <- liftEffect $ Client.joinNs @AppProtocol @"game" sock
+        liftAff $ delay (Milliseconds 200.0)
+
+        -- Disconnect lobby namespace
+        liftEffect $ Client.disconnect (socketRefFromHandle lobby)
+        liftAff $ delay (Milliseconds 100.0)
+
+        -- Game namespace should still work
+        liftEffect $ Client.emit @"move" game { x: 7, y: 0 }
+        liftAff $ delay (Milliseconds 200.0)
+
+        mx <- liftEffect $ Ref.read moveRef
+        mx `shouldEqual` 7
+
+        -- Cleanup
+        liftEffect $ Client.disconnect sock
         liftEffect $ Server.closeServer server
         liftAff $ delay (Milliseconds 100.0)

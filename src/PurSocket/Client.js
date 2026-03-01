@@ -7,11 +7,10 @@ import { io } from "socket.io-client";
 export const primConnect = (url) => () => io(url);
 
 // primJoin :: SocketRef -> String -> Effect SocketRef
-// Extracts the base URL from the existing socket and creates a new
-// connection to the named namespace.
+// Reuses the existing Manager (shared transport) to connect to a
+// namespace, instead of creating a new independent connection.
 export const primJoin = (baseSocket) => (ns) => () => {
-  const baseUrl = baseSocket.io.uri;
-  return io(baseUrl + "/" + ns);
+  return baseSocket.io.socket("/" + ns);
 };
 
 // primEmit :: SocketRef -> String -> a -> Effect Unit

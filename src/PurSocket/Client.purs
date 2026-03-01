@@ -23,6 +23,8 @@ module PurSocket.Client
   , onMsg
   , onConnect
   , onDisconnect
+  , onConnectNs
+  , onDisconnectNs
   , disconnect
   , defaultTimeout
   , DisconnectReason(..)
@@ -226,6 +228,21 @@ onDisconnect :: SocketRef -> (DisconnectReason -> Effect Unit) -> Effect Unit
 onDisconnect socket callback =
   primOnDisconnect socket (\reasonStr -> callback (parseDisconnectReason reasonStr))
 
+-- | Register a callback that fires when a namespace socket connects.
+-- |
+-- | Like `onConnect`, but operates on a `NamespaceHandle` instead of
+-- | a raw `SocketRef`.
+onConnectNs :: forall protocol ns. NamespaceHandle protocol ns -> Effect Unit -> Effect Unit
+onConnectNs handle callback = primOnConnect (socketRefFromHandle handle) callback
+
+-- | Register a callback that fires when a namespace socket disconnects.
+-- |
+-- | Like `onDisconnect`, but operates on a `NamespaceHandle` instead of
+-- | a raw `SocketRef`.
+onDisconnectNs :: forall protocol ns. NamespaceHandle protocol ns -> (DisconnectReason -> Effect Unit) -> Effect Unit
+onDisconnectNs handle callback =
+  primOnDisconnect (socketRefFromHandle handle) (\reasonStr -> callback (parseDisconnectReason reasonStr))
+
 -- | Disconnect a socket from the server.
 -- |
 -- | Internally calls `socket.disconnect()`.
@@ -239,8 +256,8 @@ disconnect = primDisconnect
 -- | Connect to a Socket.io server.  Wraps `io(url)`.
 foreign import primConnect :: String -> Effect SocketRef
 
--- | Connect to a namespace.  Extracts the base URL from the socket
--- | and calls `io(baseUrl + "/" + ns)`.
+-- | Connect to a namespace via the shared Manager.
+-- | Calls `baseSocket.io.socket("/" + ns)`.
 foreign import primJoin :: SocketRef -> String -> Effect SocketRef
 
 -- | Emit a fire-and-forget event.  Wraps `socket.emit(event, payload)`.
